@@ -1,0 +1,7 @@
+//this client execution script tests whether or not one transaction aborts
+//with a concurrent read request on a transaction with a write request (use luf2 with this)
+start,1
+newflight,1,1,1,1
+newcar,1,a,1,1
+newroom,1,a,1,1
+commit,1

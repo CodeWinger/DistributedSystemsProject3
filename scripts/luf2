@@ -1,0 +1,7 @@
+//this client execution script tests whether or not one transaction aborts
+//with a concurrent read request on a transaction with a write request (use luf with this)
+start,2
+queryflight,2,1
+querycar,2,a
+queryroom,2,a
+commit,2

@@ -1,0 +1,11 @@
+start,1
+newflight,1,1,1,1
+commit,1
+start,2
+newcustomerid,2,1
+reserveflight,2,1,1
+start,3
+newcustomerid,3,2
+reserveflight,3,2,1
+commit,3
+commit,2

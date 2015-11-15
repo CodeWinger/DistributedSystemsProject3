@@ -1,0 +1,34 @@
+f : flight
+h : hotel
+c : car
+cu : customer
+i : itinerary
+
+
+cmds
+"+f," + flightNumber + "," + numSeats +"," + flightPrice; (add flight)
+"-f," + flightNumber + "," + seats + "," + price;		  (deleteFlight)
+"qf," + flightNumber;									  (queryFlight)
+"pf," + flightNumber; 									  (queryFlightPrice)
+
+ "+c," + location + "," + numCars +"," + carPrice		  (addCar)
+ "-c," + location + "," + numCars + "," + price;		  (deleteCar)
+ "qc," + location;										  (queryCar)
+ "pc," + location;										  (queryCarsPrice)
+
+ "+h," + location + "," + numRooms +"," + roomPrice;      (addRoom)
+ "-h," + location + "," + numRooms + "," + price;		  (deleteRooms)
+ "qh," + location;										  (queryRooms)
+ "ph," + location;										  (queryRoomsPrice)
+
+
+"+cu," + randomId										  (newCustomer)
+"+cu," + customerId;									  (newCustomerId)
+"-cu," + customerId;									  (deleteCustomer)
+"qcu," + customerId;									  (queryCustomerInfo)
+
+ "rf," + customerId + "," + flightNumber + "," + seats + "," + price (reserveFlight)
+ "rc," + customerId + "," +  location + "," + numCars + "," + price  (reserveCar)
+ "rh," + customerId + "," + location + "," + numRooms + "," + price; (reserveRoom)
+
+ READ/f/

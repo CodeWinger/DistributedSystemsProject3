@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE web-app PUBLIC "-//Sun Microsystems, 
+Inc.//DTD Web Application 2.3//EN"
+"http://java.sun.com/j2ee/dtds/web-app_2_3.dtd">
+
+<web-app>
+
+    <listener>
+        <listener-class>
+            com.sun.xml.ws.transport.http.servlet.WSServletContextListener
+        </listener-class>
+    </listener>
+
+    <servlet>
+        <servlet-name>service</servlet-name>
+        <servlet-class>
+        	com.sun.xml.ws.transport.http.servlet.WSServlet
+        </servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>service</servlet-name>
+        <url-pattern>/service</url-pattern>
+    </servlet-mapping>
+
+    <session-config>
+        <session-timeout>120</session-timeout>
+    </session-config>
+
+	<!-- Backend Rms for the middle server->
+	<env-entry> <!- CAR SERVER->
+	    <env-entry-name>car-service-host</env-entry-name>
+	    <env-entry-value>localhost</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>car-service-port</env-entry-name>
+	    <env-entry-value>1411</env-entry-value>
+	    <env-entry-type>java.lang.Integer</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>car-service-name</env-entry-name>
+	    <env-entry-value>CHANGE ME</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry>
+	<env-entry> <!- FLIGHT SERVER->
+	    <env-entry-name>flight-service-host</env-entry-name>
+	    <env-entry-value>localhost</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>flight-service-port</env-entry-name>
+	    <env-entry-value>1410</env-entry-value>
+	    <env-entry-type>java.lang.Integer</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>flight-service-name</env-entry-name>
+	    <env-entry-value>rm</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry>
+	<env-entry> <!- HOTEL SERVER->
+	    <env-entry-name>hotel-service-host</env-entry-name>
+	    <env-entry-value>localhost</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>hotel-service-port</env-entry-name>
+	    <env-entry-value>8081</env-entry-value>
+	    <env-entry-type>java.lang.Integer</env-entry-type>
+	</env-entry>
+	<env-entry>
+	    <env-entry-name>hotel-service-name</env-entry-name>
+	    <env-entry-value>CHANGE ME</env-entry-value>
+	    <env-entry-type>java.lang.String</env-entry-type>
+	</env-entry> -->
+</web-app>
