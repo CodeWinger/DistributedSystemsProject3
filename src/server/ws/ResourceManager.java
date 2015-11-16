@@ -17,6 +17,7 @@
 package server.ws;
 
 import java.util.*;
+
 import javax.jws.WebService;
 import javax.jws.WebMethod;
 
@@ -172,6 +173,11 @@ public interface ResourceManager {
     @WebMethod
     public boolean prepare(int transactionId);
     
+    @WebMethod 
+    void crash();
+    
+    @WebMethod
+    void selfdestruct(String which);
     
    // @WebMethod
    // public boolean setFileToRead(String file);

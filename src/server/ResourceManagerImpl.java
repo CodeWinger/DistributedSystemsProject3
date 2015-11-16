@@ -596,4 +596,17 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		System.out.println("Transaction aborted : " + transactionId);
 		return true;
 	}
+
+	@Override
+	public void crash() 
+	{
+		//kill server
+		shutdown();
+	}
+
+	@Override
+	public void selfdestruct(String which) 
+	{
+		//is never called
+	}
 }

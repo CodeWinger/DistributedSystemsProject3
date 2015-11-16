@@ -480,5 +480,26 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		return false;
 	}
 
+	@Override
+	public void crash() 
+	{
+		//kill server
+		System.out.println("shutting down...");
+		System.exit(0);
+	}
+
+	@Override
+	public void selfdestruct(String which) 
+	{
+		switch ( which)
+		{
+			case "f": Main.services.get(Server.Flight).proxy.crash(); break;
+			case "c": Main.services.get(Server.Car).proxy.crash(); break;
+			case "r": Main.services.get(Server.Hotel).proxy.crash(); break;
+			case "m": crash(); break;
+			default: System.out.println("invalid crash command, use f,c,r,m to crash flight, car, room, middleware server");
+		}
+	}
+
 	
 }

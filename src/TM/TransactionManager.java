@@ -1386,4 +1386,16 @@ public class TransactionManager implements server.ws.ResourceManager
 	{
 		return Main.services.get(Server.Hotel).proxy.isRoomReserved(id, location);
 	}
+
+	@Override
+	public void crash() 
+	{
+		//never called
+	}
+
+	@Override
+	public void selfdestruct(String which) 
+	{
+		//never called
+	}
 }
