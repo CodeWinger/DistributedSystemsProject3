@@ -8,6 +8,7 @@ import java.util.Random;
 import java.util.Map.Entry;
 import java.util.Vector;
 
+import filemanager.FileManager;
 import middleRM.ws.*;
 import middleRM.ws.Main.Server;
 import LockManager.*;
@@ -28,12 +29,22 @@ public class TransactionManager implements server.ws.ResourceManager
 	private static final String FLIGHT = "f";
 	private static final String CAR = "c";
 	
+	//various immutable global variables
+	public static final int READ = 0;
+	public static final int WRITE = 1;
+	public static final long TTL = 20000; //time to live for transactions : 20 seconds
+	private static final long TIMEOUT = 5000; //5 seconds before time out while calling prepare on the servers
+	
+	//only 1 transaction may be in the prepared state (-1 => up for grabs)
+	private static Integer trxPrepared = -1;
+		
 	//reference to singleton TransactionManager, to lock manager and to Main middle-ware server
 	private static TransactionManager tm;
-	private static LockManager lm = new LockManager();
+	private static final LockManager lm = new LockManager();
 	private static Main middleware;
+	private static FileManager fm;
 	static Thread enforcer;
-	private static final long TIMEOUT = 5000; //5 seconds before time out
+	
 	
 	//hashmap of current transactions
 	static final HashMap<Integer, Transaction> trxns = new HashMap<Integer,Transaction>(1000);
@@ -41,16 +52,17 @@ public class TransactionManager implements server.ws.ResourceManager
 	//hashmap of current customers
 	static final HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
 	
-	//various immutable global variables
-	public static final int READ = 0;
-	public static final int WRITE = 1;
-	public static final long TTL = 20000; //time to live : 20 seconds
+	
 	
 	//returns instance of the transaction manager
-	public static TransactionManager getInstance(Main main)
+	public static TransactionManager getInstance(Main main, FileManager fileManager)
 	{
 		if(tm == null)
+		{
 			tm = new TransactionManager(main);
+			fm = fileManager;
+		}
+			
 		return tm;
 	}
 	
@@ -147,18 +159,24 @@ public class TransactionManager implements server.ws.ResourceManager
 				}
 				
 				//we abort
-				return !abort(t.tid); //! (not) because the user asked to commit, so true to abort = false for commit
+				abort(t.tid);
+				return false; //! (not) because the user asked to commit, so true to abort = false for commit
 			}
-			
-			//every operation committed to every server, we unlock all locks
-			lm.UnlockAll(t.tid);
 			
 			//alert servers transaction has committed
 			alertServersCommit(t);
 			
+			//commit locally
+			fm.changeMasterToShadowCopy();
+			
+			//reset transaction lock/object
+			trxPrepared = -1;
+			
+			//every operation committed to every server, we unlock all locks
+			lm.UnlockAll(t.tid);
+			
 			//remove transaction from currently executing transactions set
-			trxns.remove(t.tid);
-				
+			trxns.remove(t.tid);	
 		} 
 		catch (DeadlockException e) 
 		{
@@ -184,11 +202,58 @@ public class TransactionManager implements server.ws.ResourceManager
 		Thread[] prepareThreads = new Thread[t.getServers().length + 1];
 		
 		//counter for the array prepareThreads
-		int i = 0; 
+		int i = 0;
+		
+		//data structure for middle ware to say if it is ready to abort
+		final boolean[] mwReady = new boolean[1]; mwReady[0] = false;
+		
+		//create new thread to prepare the middle ware
+		prepareThreads[i] = new Thread(new Runnable()
+		{
+			@Override
+			public void run() 
+			{
+				try
+				{
+					//TODO: test this method with commit but abort afterwards
+					
+					//prevent 2 prepare statements from racing against each other
+					synchronized(trxPrepared)
+					{
+						//transaction prepared == -1, it is open to grab
+						if (trxPrepared == -1)
+							trxPrepared = t.tid;
+						//not the right transaction id, middle ware can't commit
+						else if (t.tid != trxPrepared)
+							mwReady[0] = false;
+					}
+					
+					//write to disk the whole hash table of customers. (Don't need to serialize the 
+					// trxns hashtable since if middleware fails, all transactions will automatically abort
+					// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
+					//update approach
+					fm.writeMainMemoryToShadow(customers);
+					
+					//server is ready to commit
+					mwReady[0] =  true;
+				}
+				catch(Exception e)
+				{
+					//middle ware is not ready
+					mwReady[0] = false;
+					System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
+				}
+			}
+		});
+		//start middle ware prepare thread
+		prepareThreads[i].start();
 		
 		//iterate over all servers for the transactions
 		for ( Server s : t.getServers())
 		{
+			//increment counter
+			i++;
+			
 			//create new thread
 			prepareThreads[i] = new Thread(new Runnable()
 				{
@@ -214,36 +279,9 @@ public class TransactionManager implements server.ws.ResourceManager
 			
 			//run the thread
 			prepareThreads[i].start();
-			
-			//increment counter
-			i++;
 		}
 		
-		//data structure for middle ware to say if it is ready to abort
-		final boolean[] mwReady = new boolean[1]; mwReady[0] = false;
 		
-		//create new thread to prepare the middle ware
-		prepareThreads[i] = new Thread(new Runnable()
-		{
-			@Override
-			public void run() 
-			{
-				try
-				{
-					//TODO: implement this, need to change customers data structures as if we already committed them
-					// write to stable storage
-					mwReady[0] = true;
-				}
-				catch(Exception e)
-				{
-					//middle ware is not ready
-					mwReady[0] = false;
-					System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
-				}
-			}
-		});
-		//start middle ware prepare thread
-		prepareThreads[i].start();
 		
 		//create thread to enforce timeout mechanism for the prepare threads array
 		Thread timeoutEnforcer = new Thread(new Runnable()

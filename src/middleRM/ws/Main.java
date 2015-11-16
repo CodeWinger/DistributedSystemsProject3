@@ -26,6 +26,8 @@ import javax.naming.NamingException;
 
 import org.apache.catalina.startup.Tomcat;
 
+import filemanager.FileManager;
+
 @WebService
 public class Main implements server.ws.ResourceManager { //server.ws.ResourceManager
 	
@@ -38,7 +40,7 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 	public enum Server {Flight, Car, Hotel;}
 	
 	//singleton object for transaction manager
-	private final TransactionManager tm = TransactionManager.getInstance(this);
+	private final TransactionManager tm;
 	
 	//public static final int READ = 0;
 	//public static final int WRITE = 1;
@@ -88,8 +90,8 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		Connection hotelServer = new Connection(hotelServiceName, hotelServiceHost, hotelServicePort );
 		services.put(Server.Hotel, hotelServer);
 		
-		//dispatch a thread to enforce TTL for transactions
-		//new TTLEnforcer(this).run();
+		//TODO: get file names
+		tm = TransactionManager.getInstance(this, new FileManager("masterPointer", "file1", "file2", "dir"));
 	}
 	
 	public static void main(String[] args) throws Exception 
@@ -471,8 +473,10 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 	}
 
 	@Override
-	public boolean prepare(int transactionId) {
-		// TODO Auto-generated method stub
+	public boolean prepare(int transactionId) 
+	{
+		// TODO pretty sure not used
+		System.out.println("CAUTION :prepare method called in middleware, doesn't do anything");
 		return false;
 	}
 
