@@ -164,5 +164,7 @@ public interface ResourceManager {
     
     @WebMethod
     public boolean isRoomReserved(int id, String location);
-    					
+    
+    @WebMethod
+    public boolean prepare(int transactionId);			
 }

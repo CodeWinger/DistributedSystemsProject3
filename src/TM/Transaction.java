@@ -12,7 +12,7 @@ import middleRM.ws.Main.Server;
 class Transaction
 {	
 	//keeps the servers being used by the transaction
-	private ArrayList<Main.Server> servers = new ArrayList<Main.Server>(3);
+	public ArrayList<Main.Server> servers = new ArrayList<Main.Server>(3);
 	
 	//list of operations executed so far by transaction. needed in case we rollback
 	private LinkedList<String> operationsToExecute = new LinkedList<String>();

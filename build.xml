@@ -41,14 +41,14 @@
         <classpath refid="jaxws.classpath"/>
     </taskdef>
 
-    <target name="build-server" > <!-- depends="setup" -->
+    <target name="build-server" > <!-- depends="setup"  REMOVE MAIN/** BELOW IF NEEDED-->
         <annotationProcessing
                 fork="true"
                 debug="true"
                 verbose="${verbose}"
                 destdir="${basedir}/build/classes"
                 srcdir="${basedir}/src"
-                includes="server/**"
+                includes="server/**,main/**"
                 sourceDestDir="${basedir}/build/classes"
                 procOnly="false"
                 sourcepath="${basedir}/src">
@@ -86,7 +86,7 @@
         <java fork="true" classname="main.Main">
             <classpath>
                 <path refid="jaxws.classpath"/>
-                <pathelement location="${basedir}/build/"/>
+                <pathelement location="${basedir}/build/classes"/>
             </classpath>
             <jvmarg value="-Djava.security.policy=${basedir}/etc/server.policy"/>
             <arg value="${service.name}"/>
@@ -106,14 +106,15 @@
      <target name="build-main">
          <javac
                 fork="true"
-                srcdir="${basedir}/src/main"
-                destdir="${basedir}/build/">
-               
+                srcdir="${basedir}/src"
+                destdir="${basedir}/build/classes"
+               	includes="main/**,server/**">
             <classpath refid="jaxws.classpath"/>
-     		 <!--includes="client/"> -->
+     		 <!--includes="client/">   ,${basedir}/src/server/**   -->
         </javac>  
     </target>
 
+    	
     <taskdef name="wsimport" classname="com.sun.tools.ws.ant.WsImport">
         <classpath refid="jaxws.classpath"/>
     </taskdef>

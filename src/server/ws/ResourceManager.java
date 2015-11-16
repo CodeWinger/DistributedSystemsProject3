@@ -164,5 +164,22 @@ public interface ResourceManager {
     
     @WebMethod
     public boolean isRoomReserved(int id, String location);
+    
+    
+    		
+    
+    /* ASSIGNMENT P3 METHODS FOR 2 PHASE COMMIT*/
+    @WebMethod
+    public boolean prepare(int transactionId);
+    
+    
+   // @WebMethod
+   // public boolean setFileToRead(String file);
+    
+    /*@WebMethod
+    public boolean writeToStableStorage(int id, String location);
+    
+    @WebMethod
+    public boolean readFromStableStorage(int id, String location);*/
     			
 }

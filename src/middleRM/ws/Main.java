@@ -469,4 +469,12 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 	{
 		return services.get(Server.Hotel).proxy.isRoomReserved(id, location);
 	}
+
+	@Override
+	public boolean prepare(int transactionId) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	
 }

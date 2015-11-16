@@ -33,6 +33,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	private static LockManager lm = new LockManager();
 	private static Main middleware;
 	static Thread enforcer;
+	private static final long TIMEOUT = 5000; //5 seconds before time out
 	
 	//hashmap of current transactions
 	static final HashMap<Integer, Transaction> trxns = new HashMap<Integer,Transaction>(1000);
@@ -88,6 +89,14 @@ public class TransactionManager implements server.ws.ResourceManager
 		return true;
 	}
 	
+	@Override
+	//prepare to commit by writing to stable storage necessary data structures
+	public boolean prepare(int transactionId) 
+	{
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
 	//Attempt to commit the given transaction; return true upon success; upon deadlock, we abort, upon a false response from server we abort as well
 	@Override
 	public boolean commit(int transactionId) 
@@ -125,6 +134,22 @@ public class TransactionManager implements server.ws.ResourceManager
 				executeCommand(t.tid, cmd);
 			}
 			
+			//check if servers are ready to commit
+			boolean ready = areServersReadyToCommit(t);
+			
+			//if not ready
+			if (!ready)
+			{
+				synchronized(t)
+				{
+					//set is terminating false, the abort call will need this field
+					t.isTerminating = false;
+				}
+				
+				//we abort
+				return !abort(t.tid); //! (not) because the user asked to commit, so true to abort = false for commit
+			}
+			
 			//every operation committed to every server, we unlock all locks
 			lm.UnlockAll(t.tid);
 			
@@ -142,9 +167,134 @@ public class TransactionManager implements server.ws.ResourceManager
 			System.out.println("Deadlock: Transaction " + t.tid + " will abort.");
 			abort(transactionId);
 			return false;
-		} 
+		}
 		
 		//return true to user, everything committed fine
+		return true;
+	}
+
+	/*checks to see if servers are ready to commit by running a multi-threaded procedure and enforcing a time out mechanism
+	 * on the threads that query each server*/
+	private boolean areServersReadyToCommit(Transaction t)
+	{
+		//array list of servers with a yes vote
+		ArrayList<Server> yes = new ArrayList<Server>();
+		
+		//array of threads to service each server
+		Thread[] prepareThreads = new Thread[t.getServers().length + 1];
+		
+		//counter for the array prepareThreads
+		int i = 0; 
+		
+		//iterate over all servers for the transactions
+		for ( Server s : t.getServers())
+		{
+			//create new thread
+			prepareThreads[i] = new Thread(new Runnable()
+				{
+					@Override
+					public void run() 
+					{
+						try
+						{
+							if (Main.services.get(s).proxy.prepare(t.tid))
+								yes.add(s);
+						} 
+						catch(Exception e)
+						{
+							//server is not ready
+							System.out.println("Time out for prepare call to server : " + s.toString());
+							System.out.println("Calling abort of transaction " + t.tid + "  on the server : " + s.toString());
+							Main.services.get(s).proxy.abort(t.tid);
+						}
+						
+					}
+					
+				});
+			
+			//run the thread
+			prepareThreads[i].start();
+			
+			//increment counter
+			i++;
+		}
+		
+		//data structure for middle ware to say if it is ready to abort
+		final boolean[] mwReady = new boolean[1]; mwReady[0] = false;
+		
+		//create new thread to prepare the middle ware
+		prepareThreads[i] = new Thread(new Runnable()
+		{
+			@Override
+			public void run() 
+			{
+				try
+				{
+					//TODO: implement this, need to change customers data structures as if we already committed them
+					// write to stable storage
+					mwReady[0] = true;
+				}
+				catch(Exception e)
+				{
+					//middle ware is not ready
+					mwReady[0] = false;
+					System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
+				}
+			}
+		});
+		//start middle ware prepare thread
+		prepareThreads[i].start();
+		
+		//create thread to enforce timeout mechanism for the prepare threads array
+		Thread timeoutEnforcer = new Thread(new Runnable()
+		{
+			@Override
+			public void run() 
+			{
+				try
+				{
+					//sleep timeout amount
+					Thread.sleep(TIMEOUT);
+					
+					//iterate over all threads
+					for (int j = 0; j < t.getServers().length; j++)
+						//check if they are still alive
+						if ( prepareThreads[j].isAlive())
+							//kill the thread
+							prepareThreads[j].interrupt();
+				}
+				catch(Exception e)
+				{
+					System.out.println("timeoutEnforcer for prepareThreads has been terminated prematurely");
+				}
+			}
+		});
+		
+		//start the enforcer thread
+		timeoutEnforcer.start();
+		 
+		//iterate over all threads and attempt to join with each of them
+		for( i=0; i< t.getServers().length; i++) 
+			try { prepareThreads[i].join(); } catch (Exception e){}
+		   
+		//check if enforcer is still running and if so, interrupt the thread
+		if (timeoutEnforcer.isAlive())
+			timeoutEnforcer.interrupt();
+		
+		//at this point either all threads terminated and answered yes, or at least one of them said no or timed out. In either case,
+		//all timed out or no server responses aborted
+		
+		//check whether |yes| != |t.servers| & middle ware is ready
+		if ( yes.size() != t.getServers().length && mwReady[0])
+		{
+			//change servers in transaction that need to be notified for aborting (all servers that voted yes
+			t.servers = yes;
+			
+			//not all servers are ready to commit
+			return false;
+		}
+		
+		//|yes| == |t.servers|, all servers voted yes and are therfore ready to commit
 		return true;
 	}
 	
@@ -326,6 +476,7 @@ public class TransactionManager implements server.ws.ResourceManager
 		 //delete transaction from pool of currently executing transactions
 		 trxns.remove(transactionId);
 	
+		 //abort successfully completed
 		return true;
 	}
 

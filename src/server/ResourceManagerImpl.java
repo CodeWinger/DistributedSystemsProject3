@@ -5,16 +5,62 @@
 
 package server;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.util.*;
 
 import javax.jws.WebService;
+
+import main.Main;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
+import filemanager.FileManager;
 
 
 @WebService(endpointInterface = "server.ws.ResourceManager")
 public class ResourceManagerImpl implements server.ws.ResourceManager {
     
     protected RMHashtable m_itemHT = new RMHashtable();
+    private FileManager fm;
     
+    private String masterFile = "m";
+    private String shadowFile = "f2";
+    private String currentFile = "f1";
+    
+    //constructor to obtain the type of server (Flight, Car, Room) upon booting up to check for master node
+    public static String file = "dummy";
+	 public ResourceManagerImpl() //TODO: call bootup here, but fix reading xml files first
+	 {
+		 
+		 try {
+			 Context env = (Context) new InitialContext().lookup("java:comp/env");
+			 String flightServiceHost = (String) env.lookup("flight-service-host");
+			 file = flightServiceHost;
+		} catch (NamingException e) {
+			System.out.println("failed to read xml file" );
+			e.printStackTrace();
+		}
+		 
+		//file = Main.file;
+		System.out.println("In ResourceManagerImpl()... was file set?"); 
+		System.out.println("file is " + file);
+		System.out.println("file is for main.file " + Main.file);
+		
+		System.out.println("setting up file manager... ");
+		fm = new FileManager(masterFile, currentFile, shadowFile, "");
+	 }
     
     // Basic operations on RMItem //
     
@@ -451,21 +497,6 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		return true;
 	}
 
-
-	@Override
-	public boolean commit(int transactionId) {
-		// TODO Auto-generated method stub
-		System.out.println("Transaction committed : " + transactionId);
-		return true;
-	}
-
-	@Override
-	public boolean abort(int transactionId) {
-		// TODO Auto-generated method stub
-		System.out.println("Transaction aborted : " + transactionId);
-		return true;
-	}
-
 	@Override
 	public boolean shutdown() {
 		// TODO Auto-generated method stub
@@ -499,5 +530,70 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			 return false;
 		 else
 			 return i.getReserved() > 0;
+	}
+
+	//int to represent transaction preparing to commit, only 1 at a time
+	 private Integer trxPrepared = -1;
+	 
+	@Override
+	//writes the current values in its hashtable in stable storage,awaiting the commit request
+	public boolean prepare(int transactionId) 
+	{
+		//prevent 2 prepare statements from racing against each other
+		synchronized(trxPrepared)
+		{
+			//transaction prepared == -1, it is open to grab
+			if (trxPrepared == -1)
+				trxPrepared = transactionId;
+			//not the right transaction id, we return false
+			else if (transactionId != trxPrepared)
+				return false;
+		}
+		
+		//write to disk the whole hash table
+		fm.writeMainMemoryToShadow(m_itemHT);
+		
+		//server is ready to commit
+		return true;
+	}
+	
+	@Override
+	//changes the shadow and master copy in the file manager, this action should be atomic
+	public boolean commit(int transactionId) 
+	{
+		//get lock on transaction object
+		synchronized(trxPrepared)
+		{
+			//should not happen, TODO remove this check afterwards
+			if (transactionId != trxPrepared)
+				System.out.println("CANNOT COMMIT TRANSACTIONID IS WRONG, expecting " + trxPrepared + " , but received " + transactionId);
+			
+			//reset trxPrepared
+			trxPrepared = -1;
+			
+			System.out.println("Transaction committed : " + transactionId);
+			return fm.changeMasterToShadowCopy();
+		}
+		
+	}
+
+	@Override
+	//aborts the transaction, either forced (deadlock) or by user
+	public boolean abort(int transactionId) 
+	{
+		//check here if this is the transaction that was prepared, if so reset the trxPrepared value
+		if ( trxPrepared == transactionId ) 
+		{
+			//reset trxPrepared
+			trxPrepared = -1;
+			//this allows another transaction to overwrite the current shadow file so no harm is done
+		}
+		else if (trxPrepared != transactionId) //TODO: not sure, probably not needed
+		{
+			
+		}
+		
+		System.out.println("Transaction aborted : " + transactionId);
+		return true;
 	}
 }
