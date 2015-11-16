@@ -508,6 +508,14 @@ public class TransactionManager implements server.ws.ResourceManager
 		 //unlock all resources held by transaction, if any
 		 lm.UnlockAll(transactionId);
 		 
+		//reset trxPrepared
+		 synchronized ( trxPrepared)
+		 {
+			 if ( t.tid == trxPrepared)
+					trxPrepared = -1;
+				 	//this allows another transaction to overwrite the current shadow file so no harm is done
+		 }
+		 
 		 //call all servers to tell them to abort
 		 alertServersAbort(t);
 		 
