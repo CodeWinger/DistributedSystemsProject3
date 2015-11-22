@@ -1,8 +1,9 @@
 package TM;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
-class Item
+class Item implements Serializable
 {
 	int count;
     int price;

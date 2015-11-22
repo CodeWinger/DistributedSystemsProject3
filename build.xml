@@ -25,6 +25,18 @@
 
     <target name="clean">
         <delete dir="${basedir}/build" includeEmptyDirs="true"/>
+        <delete file="${basedir}/server/car/m.txt"/>
+        <delete file="${basedir}/server/car/f1.txt"/>
+        <delete file="${basedir}/server/car/f2.txt"/>
+        <delete file="${basedir}/server/flight/m.txt"/>
+        <delete file="${basedir}/server/flight/f1.txt"/>
+        <delete file="${basedir}/server/flight/f2.txt"/>
+        <delete file="${basedir}/server/room/m.txt"/>
+        <delete file="${basedir}/server/room/f1.txt"/>
+        <delete file="${basedir}/server/room/f2.txt"/>
+        <delete file="${basedir}/server/middle/m.txt"/>
+        <delete file="${basedir}/server/middle/f1.txt"/>
+        <delete file="${basedir}/server/middle/f2.txt"/>
     </target>
 
     <target name="setup">

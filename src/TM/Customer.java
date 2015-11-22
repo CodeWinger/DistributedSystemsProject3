@@ -1,9 +1,10 @@
 package TM;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.LinkedList;
 
-class Customer
+class Customer implements Serializable
 {
 	//customer id
 	public final int id;
