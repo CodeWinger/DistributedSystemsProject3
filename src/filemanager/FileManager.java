@@ -25,20 +25,20 @@ public class FileManager
 	private File shadowFile;
 	
 	//constructs the new files for stable storage by checking whether or not the master record exists and setting files accordingly
-	public FileManager(String masterFile, String file1, String file2, String directory)
+	public FileManager(String masterFile, String file1, String file2)
 	{
 		//create new file elements
 		masterFilePointer = new File( masterFile);
 
-		File f1 = new File(directory + "/" + file1);
-		File f2 = new File(directory + "/" + file2);
+		File f1 = new File(file1);
+		File f2 = new File(file2);
 		
 		//check if master file already exists, if so do not create from scratch the master file
 		if (masterFilePointer.exists())
 		{
 			//debug purposes TODO : remove this check
-			if (new File(directory).list().length != 3)
-				System.out.println("Direcotry " + directory + " with master node exists, but wrong number of files!");
+			//if (new File(directory).list().length != 3)
+				//System.out.println("Directory with master node exists, but wrong number of files!");
 				
 			try 
 			{
@@ -78,6 +78,21 @@ public class FileManager
 			//set currentMaster to f1 (doesn't matter, could have been f2 since both of them are the same) and f2 to shadowFile
 			currentMasterFile = f1;
 			shadowFile = f2;
+			
+			PrintWriter writer;
+			try {
+				//get writer object
+				writer = new PrintWriter(masterFilePointer, "UTF-8");
+				
+				//print new current master file (this is considered an atomic expression
+				writer.println(currentMasterFile.toString()); //TODO: write here places a path may, cause problems
+			
+				//close resource
+				writer.close();
+
+			} catch (Exception e) {	
+				System.out.println("could not initialize master node");
+			}
 		}
 	}
 	

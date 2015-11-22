@@ -48,7 +48,7 @@
                 verbose="${verbose}"
                 destdir="${basedir}/build/classes"
                 srcdir="${basedir}/src"
-                includes="server/**,main/**"
+                includes="server/**,main/**,fileManager/**"
                 sourceDestDir="${basedir}/build/classes"
                 procOnly="false"
                 sourcepath="${basedir}/src">
@@ -59,10 +59,17 @@
         </annotationProcessing>
     </target>
 
+
+
+<!--- <target name="create-server-war">
+        <war warfile="${basedir}/build/war/${service.name}.war"
+                 webxml="${server.src}/ws/${service.name}-web.xml"> -->
+
+              <!--web xml was : webxml="etc/web.xml" -->   
     <target name="create-war">
         <war 
             warfile="${basedir}/build/war/${service.name}.war" 
-            webxml="etc/web.xml">
+             webxml="${basedir}/server/ws/${service.name}-web.xml">
             <webinf dir="${basedir}/etc" includes="sun-jaxws.xml"/>
             <zipfileset
                     dir="${basedir}/etc"
@@ -108,7 +115,7 @@
                 fork="true"
                 srcdir="${basedir}/src"
                 destdir="${basedir}/build/classes"
-               	includes="main/**,server/**">
+               	includes="main/**,server/**,fileManager/**">
             <classpath refid="jaxws.classpath"/>
      		 <!--includes="client/">   ,${basedir}/src/server/**   -->
         </javac>  
@@ -207,7 +214,7 @@
                 fork="true"
                 srcdir="${basedir}/src"
                 destdir="${basedir}/build/classes"
-                includes="LockManager/*">
+                includes="LockManager/**">
         </javac>
 
     </target>
@@ -253,7 +260,7 @@
 		        verbose="${verbose}"
 		        destdir="${basedir}/build/classes"
 		        srcdir="${basedir}/src"
-		        includes="middleRM/**,LockManager/**,TM/**" 
+		        includes="middleRM/**,LockManager/**,TM/**,fileManager/**" 
 		        sourceDestDir="${basedir}/build/classes"
 		        procOnly="false"
 		        sourcepath="${basedir}/src">

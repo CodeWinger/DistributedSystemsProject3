@@ -33,33 +33,54 @@ import filemanager.FileManager;
 public class ResourceManagerImpl implements server.ws.ResourceManager {
     
     protected RMHashtable m_itemHT = new RMHashtable();
-    private FileManager fm;
     
-    private String masterFile = "m";
-    private String shadowFile = "f2";
-    private String currentFile = "f1";
+    //resources needed to reboot server
+    private FileManager fm;
+    private String directory = "server/";
+    private static String masterFile = "m.txt";
+    private static String shadowFile = "f2.txt";
+    private static String currentFile = "f1.txt";
     
     //constructor to obtain the type of server (Flight, Car, Room) upon booting up to check for master node
-    public static String file = "dummy";
+    
 	 public ResourceManagerImpl() //TODO: call bootup here, but fix reading xml files first
 	 {
-		 
-		 try {
-			 Context env = (Context) new InitialContext().lookup("java:comp/env");
-			 String flightServiceHost = (String) env.lookup("flight-service-host");
-			 file = flightServiceHost;
-		} catch (NamingException e) {
-			System.out.println("failed to read xml file" );
-			e.printStackTrace();
-		}
-		 
-		//file = Main.file;
-		System.out.println("In ResourceManagerImpl()... was file set?"); 
-		System.out.println("file is " + file);
-		System.out.println("file is for main.file " + Main.file);
-		
-		System.out.println("setting up file manager... ");
-		fm = new FileManager(masterFile, currentFile, shadowFile, "");
+		 try 
+		 {
+			//get server's responsibility
+            Context env = (Context) new InitialContext().lookup("java:comp/env");
+            String serviceName = (String) env.lookup("service-name");
+            
+          //get directory for server to read files from
+            directory += serviceName + "/";
+            
+           /* switch(serviceName)
+            {
+            	case "car" : directory += serviceName; break;
+            	case "flight" : directory += serviceName; break;
+            	case "room" : directory += serviceName; break;
+            }*/
+            
+            //set all files 
+            masterFile = directory + masterFile;
+            shadowFile = directory + shadowFile; 
+            currentFile = directory + currentFile;
+            
+            //TODO: remove theses checks once you are done
+            /*System.out.println("path is  " + System.getProperty("user.dir"));
+            System.out.println("does client0 exist? " + new File("client0.txt"));
+            System.out.println("does master file exist? " + new File(directory + "/" + masterFile).exists());
+            System.out.println("does current file exist? " + new File(directory + "/" +  currentFile).exists());
+            System.out.println("does shadow file exist? " + new File(directory + "/" + shadowFile).exists());*/
+            
+            //create new file manager
+            fm = new FileManager(masterFile, shadowFile, currentFile);
+        } 
+		catch (Exception ex) 
+		{
+            ex.printStackTrace();
+            System.exit(1);
+	    }
 	 }
     
     // Basic operations on RMItem //

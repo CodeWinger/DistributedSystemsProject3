@@ -105,8 +105,39 @@ public class TransactionManager implements server.ws.ResourceManager
 	//prepare to commit by writing to stable storage necessary data structures
 	public boolean prepare(int transactionId) 
 	{
-		// TODO Auto-generated method stub
-		return false;
+		//get transaction
+		Transaction t = trxns.get(transactionId);
+		
+		try
+		{
+			//TODO: test this method with commit but abort afterwards
+			
+			//prevent 2 prepare statements from racing against each other
+			synchronized(trxPrepared)
+			{
+				//transaction prepared == -1, it is open to grab
+				if (trxPrepared == -1)
+					trxPrepared = t.tid;
+				//not the right transaction id, middle ware can't commit
+				else if (t.tid != trxPrepared)
+					return false;
+			}
+			
+			//write to disk the whole hash table of customers. (Don't need to serialize the 
+			// trxns hashtable since if middleware fails, all transactions will automatically abort
+			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
+			//update approach
+			fm.writeMainMemoryToShadow(customers);
+			
+			//server is ready to commit
+			return true;
+		}
+		catch(Exception e)
+		{
+			//middle ware is not ready
+			System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
+			return false;
+		}
 	}
 	
 	//Attempt to commit the given transaction; return true upon success; upon deadlock, we abort, upon a false response from server we abort as well
@@ -213,36 +244,8 @@ public class TransactionManager implements server.ws.ResourceManager
 			@Override
 			public void run() 
 			{
-				try
-				{
-					//TODO: test this method with commit but abort afterwards
-					
-					//prevent 2 prepare statements from racing against each other
-					synchronized(trxPrepared)
-					{
-						//transaction prepared == -1, it is open to grab
-						if (trxPrepared == -1)
-							trxPrepared = t.tid;
-						//not the right transaction id, middle ware can't commit
-						else if (t.tid != trxPrepared)
-							mwReady[0] = false;
-					}
-					
-					//write to disk the whole hash table of customers. (Don't need to serialize the 
-					// trxns hashtable since if middleware fails, all transactions will automatically abort
-					// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
-					//update approach
-					fm.writeMainMemoryToShadow(customers);
-					
-					//server is ready to commit
-					mwReady[0] =  true;
-				}
-				catch(Exception e)
-				{
-					//middle ware is not ready
-					mwReady[0] = false;
-					System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
-				}
+				//check if middleware is ready to commit
+				mwReady[0] = commit(t.tid);
 			}
 		});
 		//start middle ware prepare thread
@@ -280,8 +283,6 @@ public class TransactionManager implements server.ws.ResourceManager
 			//run the thread
 			prepareThreads[i].start();
 		}
-		
-		
 		
 		//create thread to enforce timeout mechanism for the prepare threads array
 		Thread timeoutEnforcer = new Thread(new Runnable()

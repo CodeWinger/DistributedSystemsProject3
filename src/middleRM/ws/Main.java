@@ -35,7 +35,10 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 	public static final HashMap<Server, Connection> services = new HashMap<Server, Connection>(3);
 
 	//customer support
-	
+	private static String directory = "server/middle/";
+    private static String masterFile = "m.txt";
+    private static String shadowFile = "f2.txt";
+    private static String currentFile = "f1.txt";
 	
 	public enum Server {Flight, Car, Hotel;}
 	
@@ -91,7 +94,7 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		services.put(Server.Hotel, hotelServer);
 		
 		//TODO: get file names
-		tm = TransactionManager.getInstance(this, new FileManager("masterPointer", "file1", "file2", "dir"));
+		tm = TransactionManager.getInstance(this, new FileManager(directory + masterFile, directory + currentFile, directory + shadowFile));
 	}
 	
 	public static void main(String[] args) throws Exception 
