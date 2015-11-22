@@ -2,12 +2,15 @@ package TM;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Random;
 import java.util.Map.Entry;
 import java.util.Vector;
 
+import server.RMHashtable;
 import filemanager.FileManager;
 import middleRM.ws.*;
 import middleRM.ws.Main.Server;
@@ -33,7 +36,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	public static final int READ = 0;
 	public static final int WRITE = 1;
 	public static final long TTL = 20000; //time to live for transactions : 20 seconds
-	private static final long TIMEOUT = 5000; //5 seconds before time out while calling prepare on the servers
+	private static final long TIMEOUT = 30000; //30 seconds before time out while calling prepare on the servers (TODO change this)
 	
 	//only 1 transaction may be in the prepared state (-1 => up for grabs)
 	private static Integer trxPrepared = -1;
@@ -50,7 +53,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	static final HashMap<Integer, Transaction> trxns = new HashMap<Integer,Transaction>(1000);
 	
 	//hashmap of current customers
-	static final HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
+	static HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
 	
 	
 	
@@ -63,6 +66,17 @@ public class TransactionManager implements server.ws.ResourceManager
 			fm = fileManager;
 		}
 		
+		//set up hashtable of customer
+        Object data = fm.readFromStableStorage();
+        if ( data != null)
+        {
+        	System.out.println("read from disk, recovering... ");
+        	customers = (HashMap<Integer, Customer>) data;
+        }
+        else
+        {
+        	System.out.println("could not read from disk ... ");
+        }
 		return tm;
 	}
 	
@@ -245,7 +259,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			public void run() 
 			{
 				//check if middleware is ready to commit
-				mwReady[0] = commit(t.tid);
+				mwReady[0] = prepare(t.tid);
 			}
 		});
 		//start middle ware prepare thread
@@ -265,8 +279,13 @@ public class TransactionManager implements server.ws.ResourceManager
 					{
 						try
 						{
-							if (Main.services.get(s).proxy.prepare(t.tid))
-								yes.add(s);
+							boolean rdy = Main.services.get(s).proxy.prepare(t.tid);
+							System.out.println("server " + s.toString() + " ready to commit? " + rdy);
+							if (rdy)
+								synchronized(yes)
+								{
+									yes.add(s);
+								}
 						} 
 						catch(Exception e)
 						{
@@ -313,19 +332,35 @@ public class TransactionManager implements server.ws.ResourceManager
 		timeoutEnforcer.start();
 		 
 		//iterate over all threads and attempt to join with each of them
-		for( i=0; i< t.getServers().length; i++) 
-			try { prepareThreads[i].join(); } catch (Exception e){}
-		   
+		for( i=0; i < t.getServers().length + 1; i++) 
+			try { 
+					prepareThreads[i].join(); 
+				}
+			catch (Exception e){System.out.println("join didnt work");}
+		
 		//check if enforcer is still running and if so, interrupt the thread
 		if (timeoutEnforcer.isAlive())
 			timeoutEnforcer.interrupt();
 		
+		//TODO: remove this afterwards
+		/*System.out.println("Prepare results :");
+		System.out.println("nubmer of servers involved in transaction " + t.getServers().length);
+		for (Server s : yes)
+			System.out.println("Server " + s.toString() + " is ready to commit");
+		System.out.println("middle ware ready to commit " + mwReady[0]);*/
+	
 		//at this point either all threads terminated and answered yes, or at least one of them said no or timed out. In either case,
 		//all timed out or no server responses aborted
 		
 		//check whether |yes| != |t.servers| & middle ware is ready
 		if ( yes.size() != t.getServers().length && mwReady[0])
 		{
+			/*ArrayList<Server> serversToAbort = new ArrayList<Server>();
+			
+			for(i = 0; i < yes.length; i++)
+				if (yes[i] != null)
+					serversToAbort.add(yes[i]);*/
+			
 			//change servers in transaction that need to be notified for aborting (all servers that voted yes
 			t.servers = yes;
 			

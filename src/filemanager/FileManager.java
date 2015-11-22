@@ -12,7 +12,7 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.file.Files;
-import server.RMHashtable;
+import server.*;
 
 /*class used to manager writing necessary data to disk using the shadowing technique for the 2 phase commit protocol*/
 public class FileManager 
@@ -120,23 +120,24 @@ public class FileManager
 	{
 		try
         {
-		   //get file and object output stream
-           FileOutputStream fos = new FileOutputStream(shadowFile);
-           ObjectOutputStream oos = new ObjectOutputStream(fos);
-           
-           //write data to file
-           oos.writeObject(data);
-           
-           //close resources
-           oos.close();
-           fos.close();
-           
-           System.out.printf("Serialized data object " + data + " in current shadowing file " + shadowFile); //TODO: remove this when done
+			//get file and object output stream
+			FileOutputStream fos = new FileOutputStream(shadowFile);
+        	ObjectOutputStream oos = new ObjectOutputStream(fos);
+
+        	//write data to file
+        	oos.writeObject(data);
+        	
+            //close resources
+            oos.close();
+            fos.close();
+          
+           System.out.printf("Serialized data object in current shadowing file " + shadowFile); //TODO: remove this when done
            return true;
         }
 		catch(Exception e)
 	     {
-	         System.out.println("Could not write to disk for object : " + data);
+	         System.out.println("Could not write to disk for object : ");
+	         e.printStackTrace();
 	         return false;
 	     }
 	}
@@ -152,7 +153,7 @@ public class FileManager
 			if (currentMasterFile.length() == 0)
 				return data;
 			
-			//create file and object input stream
+			 //create file and object input stream
 	         FileInputStream fis = new FileInputStream(currentMasterFile);
 	         ObjectInputStream ois = new ObjectInputStream(fis);
 	         

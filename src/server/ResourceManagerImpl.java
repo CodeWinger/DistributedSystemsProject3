@@ -42,8 +42,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     private static String currentFile = "f1.txt";
     
     //constructor to obtain the type of server (Flight, Car, Room) upon booting up to check for master node
-    
-	 public ResourceManagerImpl() //TODO: call bootup here, but fix reading xml files first
+	 public ResourceManagerImpl()
 	 {
 		 try 
 		 {
@@ -51,15 +50,8 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
             Context env = (Context) new InitialContext().lookup("java:comp/env");
             String serviceName = (String) env.lookup("service-name");
             
-          //get directory for server to read files from
+            //get directory for server to read files from
             directory += serviceName + "/";
-            
-           /* switch(serviceName)
-            {
-            	case "car" : directory += serviceName; break;
-            	case "flight" : directory += serviceName; break;
-            	case "room" : directory += serviceName; break;
-            }*/
             
             //set all files 
             masterFile = directory + masterFile;
@@ -75,6 +67,18 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
             
             //create new file manager
             fm = new FileManager(masterFile, shadowFile, currentFile);
+            
+            //set up hashtable
+            Object data = fm.readFromStableStorage();
+            if ( data != null)
+            {
+            	System.out.println("read from disk, recovering... ");
+            	m_itemHT = (RMHashtable) data;
+            }
+            else
+            {
+            	System.out.println("could not read from disk ... ");
+            }
         } 
 		catch (Exception ex) 
 		{
@@ -560,6 +564,8 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	//writes the current values in its hashtable in stable storage,awaiting the commit request
 	public boolean prepare(int transactionId) 
 	{
+		System.out.println("preparing transaction id  : " + transactionId ); //TODO: remove this when done
+		
 		//prevent 2 prepare statements from racing against each other
 		synchronized(trxPrepared)
 		{
@@ -572,10 +578,12 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		}
 		
 		//write to disk the whole hash table
-		fm.writeMainMemoryToShadow(m_itemHT);
+		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
+		
+		System.out.println("is transaction id " + transactionId + " ready to commit: " + result ); //TODO: remove this when done
 		
 		//server is ready to commit
-		return true;
+		return result;
 	}
 	
 	@Override
@@ -592,8 +600,9 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			//reset trxPrepared
 			trxPrepared = -1;
 			
+			boolean result = fm.changeMasterToShadowCopy();
 			System.out.println("Transaction committed : " + transactionId);
-			return fm.changeMasterToShadowCopy();
+			return result;
 		}
 		
 	}
