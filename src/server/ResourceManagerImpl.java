@@ -67,11 +67,11 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
             currentFile = directory + currentFile;
             
             //TODO: remove theses checks once you are done
-            /*System.out.println("path is  " + System.getProperty("user.dir"));
-            System.out.println("does client0 exist? " + new File("client0.txt"));
-            System.out.println("does master file exist? " + new File(directory + "/" + masterFile).exists());
-            System.out.println("does current file exist? " + new File(directory + "/" +  currentFile).exists());
-            System.out.println("does shadow file exist? " + new File(directory + "/" + shadowFile).exists());*/
+           /* System.out.println("path is  " + System.getProperty("user.dir"));
+            System.out.println("does client0 exist? " + new File("client0.txt").exists());
+            System.out.println("does master file exist? " + new File(masterFile).exists());
+            System.out.println("does current file exist? " + new File(shadowFile).exists());
+            System.out.println("does shadow file exist? " + new File(currentFile).exists());*/
             
             //create new file manager
             fm = new FileManager(masterFile, shadowFile, currentFile);

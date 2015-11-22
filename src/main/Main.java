@@ -5,12 +5,7 @@ import java.io.File;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 
-import server.ResourceManagerImpl;
-
-
 public class Main {
-
-	public static String file;
 	
     public static void main(String[] args) 
     throws Exception {
@@ -20,11 +15,6 @@ public class Main {
                 "Usage: java Main <service-name> <service-port> <deploy-dir>");
             System.exit(-1);
         }
-        
-        file = args[0];
-        System.out.println("file is " + file);
-        System.out.println("setting resourceManagerImpl file to " + file);
-        ResourceManagerImpl.file = args[0];
         
         String serviceName = args[0];
         int port = Integer.parseInt(args[1]);
@@ -52,11 +42,4 @@ public class Main {
         tomcat.start();
         tomcat.getServer().await();
     }
-    
-    public Main() throws Exception
-    {
-    	System.out.println("Im code you just added");
-    	System.out.println("file is : " + file);
-    }
-    
 }

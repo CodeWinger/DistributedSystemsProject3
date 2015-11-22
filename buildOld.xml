@@ -41,14 +41,14 @@
         <classpath refid="jaxws.classpath"/>
     </taskdef>
 
-    <target name="build-server" > <!-- depends="setup" -->
+    <target name="build-server" > <!-- depends="setup"  REMOVE MAIN/** BELOW IF NEEDED-->
         <annotationProcessing
                 fork="true"
                 debug="true"
                 verbose="${verbose}"
                 destdir="${basedir}/build/classes"
                 srcdir="${basedir}/src"
-                includes="server/**,fileManager/**"
+                includes="server/**,main/**,fileManager/**"
                 sourceDestDir="${basedir}/build/classes"
                 procOnly="false"
                 sourcepath="${basedir}/src">
@@ -59,10 +59,17 @@
         </annotationProcessing>
     </target>
 
+
+
+<!--- <target name="create-server-war">
+        <war warfile="${basedir}/build/war/${service.name}.war"
+                 webxml="${server.src}/ws/${service.name}-web.xml"> -->
+
+              <!--web xml was : webxml="etc/web.xml" -->   
     <target name="create-war">
         <war 
             warfile="${basedir}/build/war/${service.name}.war" 
-            webxml="${basedir}/server/ws/${service.name}-web.xml">
+             webxml="${basedir}/server/ws/${service.name}-web.xml">
             <webinf dir="${basedir}/etc" includes="sun-jaxws.xml"/>
             <zipfileset
                     dir="${basedir}/etc"
@@ -86,7 +93,7 @@
         <java fork="true" classname="main.Main">
             <classpath>
                 <path refid="jaxws.classpath"/>
-                <pathelement location="${basedir}/build/"/>
+                <pathelement location="${basedir}/build/classes"/>
             </classpath>
             <jvmarg value="-Djava.security.policy=${basedir}/etc/server.policy"/>
             <arg value="${service.name}"/>
@@ -106,14 +113,15 @@
      <target name="build-main">
          <javac
                 fork="true"
-                srcdir="${basedir}/src/main"
-                destdir="${basedir}/build/">
-               
+                srcdir="${basedir}/src"
+                destdir="${basedir}/build/classes"
+               	includes="main/**,server/**,fileManager/**">
             <classpath refid="jaxws.classpath"/>
-     		 <!--includes="client/"> -->
+     		 <!--includes="client/">   ,${basedir}/src/server/**   -->
         </javac>  
     </target>
 
+    	
     <taskdef name="wsimport" classname="com.sun.tools.ws.ant.WsImport">
         <classpath refid="jaxws.classpath"/>
     </taskdef>
@@ -184,8 +192,9 @@
 	            dest="${basedir}/webapps/${service.name}"/>
 	    </target>
 	
+	<!--was main.Main for classname -->
 	<target name="start-tomcat-MiddleRM" depends="build-middleRM">
-		<java fork="true" classname="main.Main">
+		<java fork="true" classname="main.Main"> 
 		            <classpath>
 		                <path refid="jaxws.classpath"/>
 		                <pathelement location="${basedir}/build/"/>
@@ -206,7 +215,7 @@
                 fork="true"
                 srcdir="${basedir}/src"
                 destdir="${basedir}/build/classes"
-                includes="LockManager/*">
+                includes="LockManager/**">
         </javac>
 
     </target>

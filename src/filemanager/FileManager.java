@@ -42,22 +42,41 @@ public class FileManager
 				
 			try 
 			{
+				//TODO: remove print statements afterwards 
 				//get current file name for correct data
 				BufferedReader br = new BufferedReader(new FileReader(masterFile));
 				String line = br.readLine();
-				
-				//if both filenames are valid 
-				if ((file1 == line && f2.exists()))
+				line = line.replace("\\", "/"); //replace backslashes with foward slashes
+				/*System.out.println("file 1 : " + file1);
+				System.out.println("file2 : " + file2);
+				System.out.println("line is : " + line);
+				System.out.println("file1 length " + file1.length());
+				System.out.println("file2 length " + file2.length());
+				System.out.println("line length " + line.length());
+				for ( int i = 0; i < line.length(); i++)
 				{
+					System.out.println("i : " + 1 + ", file[" + i + "] =  " + file1.charAt(i) + ", line[" + i + "] = "  + line.charAt(i));
+				}
+				System.out.println("file1 == line " + (file1.equals(line)));
+				System.out.println("file2 == line " + (file2.equals(line)));*/
+
+				//if both filenames are valid 
+				if ((file1.equals(line) /*&& f2.exists()*/))
+				{
+					System.out.println("CORRECT : file1 == line " + (file1.equals(line)));
 					currentMasterFile = f1;
 					shadowFile = f2;
 				}
 				//if both filenames are valid
-				else if (file2 == line && f1.exists())
+				else if (file2.equals(line) /*&& f1.exists()*/)
 				{
+					System.out.println("CORRECT : file2 == line " + (file2.equals(line)));
 					currentMasterFile = f2;
 					shadowFile = f1;
 				}
+				//TODO: remove this, the else ifs below should never run
+				else if( file1 != line && file2 != line)
+					System.out.println("none of the 2 files exists");
 				//debug purposes, should not ever happen since user has no control to call this code TODO : remove this
 				else if (file1 == line && !f2.exists())
 				{
@@ -151,7 +170,7 @@ public class FileManager
 		return data;
 	}
 	
-	//exchanges shadow and currentmaster values and writes to disk on the master pointer file
+	//exchanges shadow and current master values and writes to disk on the master pointer file
 	public boolean changeMasterToShadowCopy()
 	{
 		PrintWriter writer;
@@ -162,7 +181,7 @@ public class FileManager
 			//print new current master file (this is considered an atomic expression
 			writer.println(shadowFile.toString()); //TODO: write here places a path may, cause problems
 			
-			//exchange shadow and currentmaster nodes
+			//exchange shadow and current master nodes
 			File tempFile = currentMasterFile;
 			currentMasterFile = shadowFile;
 			shadowFile = tempFile;

@@ -62,7 +62,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			tm = new TransactionManager(main);
 			fm = fileManager;
 		}
-			
+		
 		return tm;
 	}
 	
