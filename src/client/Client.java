@@ -69,7 +69,7 @@ public class Client extends WSClient {
         {System.out.println("file not found");}
         System.out.println("Client Interface");
         System.out.println("Type \"help\" for list of supported commands");
-        
+      try{  
         while (true) {
         
             try {
@@ -99,32 +99,32 @@ public class Client extends WSClient {
             	
                 System.out.println("Unable to read from standard in");
                 try{
+                	 //print choices for failure here
+                    System.out.println("A basic call reserveitinerary,1,1,1,A,true,true is set up to test 2PC implementation.");
+                    System.out.println("This call will always work if it is committed normally");
+                    System.out.println(" here are the options how to crash the system:");
+                    System.out.println("\t\t0 -> commit normally");
+                    System.out.println("\tAt the middleware:");
+                    System.out.println("\t\t1 -> Crash before sending vote request");
+                    System.out.println("\t\t2 -> Crash after sending vote request and before receiving any replies");
+                    System.out.println("\t\t3 -> Crash after receiving some replies but not all");
+                    System.out.println("\t\t4 -> Crash after receiving all replies but before deciding");
+                    System.out.println("\t\t5 -> Crash after deciding but before sending decision");
+                    System.out.println("\t\t6 -> Crash after sending some but not all decisions");
+                    System.out.println("\t\t7 -> Crash after having sent all decisions");
+                    System.out.println("\n\tAt the RM's (1 : flight, 2 : car, 3 : room ");
+                    System.out.println("\t\t8,(1,2,3)  -> Crash after receive vote request but before sending answer");
+                    System.out.println("\t\t9,(1,2,3)  -> Return forced abort ");
+                    System.out.println("\t\t10,(1,2,3) -> Crash after sending answer");
+                    System.out.println("\t\t11,(1,2,3) -> Crash after receiving decision but before committing/aborting");
+                    System.out.println("\t\t12,(1,2,3) -> Recover RM");
+                    System.out.println("To call one of theses crashes, use the command :");
+                    System.out.println("\tcrash,numberAbove,(RM number if 8 <= numberAbove <= 12)");
+                    
                 	stdin= new BufferedReader(new InputStreamReader(System.in));
                 	command = stdin.readLine();
                 } catch (Exception e) {}
                 //System.exit(1);
-                
-                //print choices for failure here
-                System.out.println("A basic call reserveitinerary,1,1,1,A,true,true is set up to test 2PC implementation.");
-                System.out.println("This call will always work if it is committed normally");
-                System.out.println(" here are the options how to crash the system:");
-                System.out.println("\t\t0 -> commit normally");
-                System.out.println("\tAt the middleware:");
-                System.out.println("\t\t1 -> Crash before sending vote request");
-                System.out.println("\t\t2 -> Crash after sending vote request and before receiving any replies");
-                System.out.println("\t\t3 -> Crash after receiving some replies but not all");
-                System.out.println("\t\t4 -> Crash after receiving all replies but before deciding");
-                System.out.println("\t\t5 -> Crash after deciding but before sending decision");
-                System.out.println("\t\t6 -> Crash after sending some but not all decisions");
-                System.out.println("\t\t7 -> Crash after having sent all decisions");
-                System.out.println("\n\tAt the RM's (1 : flight, 2 : car, 3 : room ");
-                System.out.println("\t\t8,(1,2,3)  -> Crash after receive vote request but before sending answer");
-                System.out.println("\t\t9,(1,2,3)  -> Return forced abort ");
-                System.out.println("\t\t10,(1,2,3) -> Crash after sending answer");
-                System.out.println("\t\t11,(1,2,3) -> Crash after receiving decision but before committing/aborting");
-                System.out.println("\t\t12,(1,2,3) -> Recover RM");
-                System.out.println("To call one of theses crashes, use the command :");
-                System.out.println("\tcrash,numberAbove,(RM number if 8 <= numberAbove <= 12)");
             }
             //remove heading and trailing white space
             command = command.trim();
@@ -817,7 +817,10 @@ public class Client extends WSClient {
                 		proxy.startid(1);
                 		proxy.reserveItinerary(1,1,flightNum,"A",true,true);
                 		System.out.println("commiting transaction with crash number " + crashNo + " and RM number " + RMNo  + ", implying : " + reason);
-                		boolean result = proxy.commitWithCrash(1, crashNo, 0);
+                		boolean result = false;
+                		
+                			result = proxy.commitWithCrash(1, crashNo, 0);
+                	
                 		System.out.println("transaction 1 committed : " + result);
                 	}
                 	else if(crashNo < 0 || crashNo > 12)
@@ -832,7 +835,12 @@ public class Client extends WSClient {
                 break;
            }
         }
-    }
+	}
+	catch(Exception e)
+	{
+		System.out.println("middleware has died... restart it before calling other methods");
+	}
+}
         
     public Vector parse(String command) {
         Vector arguments = new Vector();
