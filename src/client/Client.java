@@ -103,6 +103,28 @@ public class Client extends WSClient {
                 	command = stdin.readLine();
                 } catch (Exception e) {}
                 //System.exit(1);
+                
+                //print choices for failure here
+                System.out.println("A basic call reserveitinerary,1,1,1,A,true,true is set up to test 2PC implementation.");
+                System.out.println("This call will always work if it is committed normally");
+                System.out.println(" here are the options how to crash the system:");
+                System.out.println("\t\t0 -> commit normally");
+                System.out.println("\tAt the middleware:");
+                System.out.println("\t\t1 -> Crash before sending vote request");
+                System.out.println("\t\t2 -> Crash after sending vote request and before receiving any replies");
+                System.out.println("\t\t3 -> Crash after receiving some replies but not all");
+                System.out.println("\t\t4 -> Crash after receiving all replies but before deciding");
+                System.out.println("\t\t5 -> Crash after deciding but before sending decision");
+                System.out.println("\t\t6 -> Crash after sending some but not all decisions");
+                System.out.println("\t\t7 -> Crash after having sent all decisions");
+                System.out.println("\n\tAt the RM's (1 : flight, 2 : car, 3 : room ");
+                System.out.println("\t\t8,(1,2,3)  -> Crash after receive vote request but before sending answer");
+                System.out.println("\t\t9,(1,2,3)  -> Return forced abort ");
+                System.out.println("\t\t10,(1,2,3) -> Crash after sending answer");
+                System.out.println("\t\t11,(1,2,3) -> Crash after receiving decision but before committing/aborting");
+                System.out.println("\t\t12,(1,2,3) -> Recover RM");
+                System.out.println("To call one of theses crashes, use the command :");
+                System.out.println("\tcrash,numberAbove,(RM number if 8 <= numberAbove <= 12)");
             }
             //remove heading and trailing white space
             command = command.trim();
@@ -744,12 +766,71 @@ public class Client extends WSClient {
                 	Thread.sleep(LOOPDELAY);
                 }catch(Exception e){}
                 break;
-                
+            
+            case 29: //simulate crashes
+            	if (arguments.size() != 3 && arguments.size() != 2 )
+        			wrongNumber();
+            	else
+            	{
+			    	int crashNo = Integer.parseInt((String) arguments.get(1));
+			    	int RMNo = 0;
             	
+            		String reason = "";
+                	switch(crashNo)
+                	{
+    	            	//middleware crashes
+    	            	case 1: reason = "Crash before sending vote request"; break;
+    	            	case 2: reason = "Crash after sending vote request and before receiving any replies"; break;
+    	            	case 3: reason = "Crash after receiving some replies but not all"; break;
+    	            	case 4: reason = "Crash after receiving all replies but before deciding"; break;
+    	            	case 5: reason = "Crash after deciding but before sending decision"; break;
+    	            	case 6: reason = "Crash after sending some but not all decisions"; break;
+    	            	case 7: reason = "Crash after having sent all decisions"; break;
+    	            	
+    	            	//RM crashes
+    	            	case 8: reason = "Crash after receive vote request but before sending answer for server " + RMNo; break;
+    	            	case 9: reason = "Force abort response from server " + RMNo; break;
+    	            	case 10: reason = "Crash after sending answer"; break;
+    	            	case 11: reason = "Crash after receiving decision but before committing/aborting for server " + RMNo; break;
+    	            	case 12: reason = "Recovery of RM no " + RMNo; break;
+    	            	default : reason = "wrong crash number";
+                	}
+                	
+                	if ( 8 <= crashNo && crashNo <= 12  ) // RM crash
+                	{
+                		RMNo = Integer.parseInt((String) arguments.get(2));
+                		
+                		/*reserveItinerary(int id, int customerId, Vector flightNumbers,
+                                    String location, boolean car, boolean room)*/
+                		Vector flightNum = new Vector();
+                		flightNum.addElement(1);
+                		proxy.startid(1);
+                		proxy.reserveItinerary(1,1,flightNum,"A",true,true);
+                		System.out.println("commiting transaction with crash number " + crashNo + " and RM number " + RMNo  + ", implying : " + reason);
+                		boolean result = proxy.commitWithCrash(1, crashNo, RMNo);
+                		System.out.println("transaction 1 committed : " + result);
+                	}
+                	else if (crashNo >= 0 && crashNo < 8)
+                	{
+                		Vector flightNum = new Vector();
+                		flightNum.addElement(1);
+                		proxy.startid(1);
+                		proxy.reserveItinerary(1,1,flightNum,"A",true,true);
+                		System.out.println("commiting transaction with crash number " + crashNo + " and RM number " + RMNo  + ", implying : " + reason);
+                		boolean result = proxy.commitWithCrash(1, crashNo, 0);
+                		System.out.println("transaction 1 committed : " + result);
+                	}
+                	else if(crashNo < 0 || crashNo > 12)
+                		System.out.println("Wrong choice number");
+            	}
+
+            	break;
+            
+           
             default:
                 System.out.println("The interface does not support this command.");
                 break;
-            }
+           }
         }
     }
         
@@ -822,6 +903,8 @@ public class Client extends WSClient {
         	return 27;
         else if (argument.compareToIgnoreCase("sleep") == 0)
         	return 28;
+        else if (argument.compareToIgnoreCase("crash") == 0)
+        	return 29;
         else
             return 666;
     }

@@ -423,7 +423,9 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 	 */
 	public boolean shutdown() {
 		
-		return tm.shutdown();
+		System.out.println("shutting down...");
+		System.exit(0);
+		return true;
 		/*LinkedList<Server> nonActiveServers = new LinkedList<Server>(Arrays.asList(Server.Car, Server.Flight, Server.Hotel));
 		
 		//iterate over each transaction, get all active servers involved in each of them, remove them from the list
@@ -502,6 +504,22 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 			case "m": crash(); break;
 			default: System.out.println("invalid crash command, use f,c,r,m to crash flight, car, room, middleware server");
 		}
+	}
+
+	@Override
+	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) {
+		return tm.commitWithCrash(transactionId, crashNumber, RM);
+	}
+
+	@Override
+	public boolean abortWithCrash(int transactionId, int crashNumber, int RM) {
+		return tm.abortWithCrash(transactionId, crashNumber, RM);
+	}
+
+	@Override
+	public boolean prepareWithCrash(int transactionId, int crashNumber, int RM) {
+		// TODO Auto-generated method stub
+		return false;
 	}
 
 	

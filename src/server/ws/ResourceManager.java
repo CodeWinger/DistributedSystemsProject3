@@ -179,6 +179,15 @@ public interface ResourceManager {
     @WebMethod
     void selfdestruct(String which);
     
+    @WebMethod
+    public boolean commitWithCrash(int transactionId, int crashNumber, int RM);
+    
+    @WebMethod
+    public boolean abortWithCrash(int transactionId, int crashNumber, int RM);
+    
+    @WebMethod
+    public boolean prepareWithCrash(int transactionId, int crashNumber, int RM);
+    
    // @WebMethod
    // public boolean setFileToRead(String file);
     

@@ -639,4 +639,137 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	{
 		//is never called
 	}
+
+	
+	//forces a specific crash on a given RM, the list being
+		//  0 No crashes
+		/*At the TM (coordinator):
+			1 Crash before sending vote request
+			2 Crash after sending vote request and before receiving any replies
+			3 Crash after receiving some replies but not all
+			4 Crash after receiving all replies but before deciding
+			5 Crash after deciding but before sending decision
+			6 Crash after sending some but not all decisions
+			7 Crash after having sent all decisions
+		* At the RMs (participants)
+			8 Crash after receive vote request but before sending answer
+			9  Which answer to send (commit/abort)
+			10 Crash after sending answer
+			11 Crash after receiving decision but before committing/aborting
+			12 Recovery of RM*/
+	@Override
+	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) {
+		
+		//Crash after receiving decision but before committing/aborting
+		if (crashNumber == 11)
+		{
+			System.out.println("Crash after receiving commit decision but before doing so for transaction " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
+			shutdown();
+		}
+		
+		//get lock on transaction object
+		synchronized(trxPrepared)
+		{
+			//should not happen, TODO remove this check afterwards
+			if (transactionId != trxPrepared)
+				System.out.println("CANNOT COMMIT WITH CRASH TRANSACTIONID IS WRONG, expecting " + trxPrepared + " , but received " + transactionId);
+			
+			//reset trxPrepared
+			trxPrepared = -1;
+			
+			boolean result = fm.changeMasterToShadowCopy();
+			System.out.println("TransactionWitCrash committed : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
+			return result;
+		}
+	}
+
+	@Override
+	public boolean abortWithCrash(int transactionId, int crashNumber, int RM) {
+		
+		//Crash after receiving decision but before committing/aborting
+		if (crashNumber == 11)
+		{
+			System.out.println("Crash after receiving abort decision but before doing so for transaction " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
+			shutdown();
+		}
+		
+		//check here if this is the transaction that was prepared, if so reset the trxPrepared value
+		if ( trxPrepared == transactionId ) 
+		{
+			//reset trxPrepared
+			trxPrepared = -1;
+			//this allows another transaction to overwrite the current shadow file so no harm is done
+		}
+		else if (trxPrepared != transactionId) //TODO: not sure, probably not needed
+		{
+			
+		}
+		
+		System.out.println("TransactionWithCrash aborted : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
+		return true;
+	}
+
+	@Override
+	public boolean prepareWithCrash(int transactionId, int crashNumber, int RM) {
+		System.out.println("preparing transaction id with crash  : " + transactionId  + ", crash number " + crashNumber + ", RM number " + RM); //TODO: remove this when done
+		
+		//Crash after receive vote request but before sending answer
+		if ( crashNumber == 8)
+		{
+			System.out.println("Prepare : Crashing before sending answer for transaction " + transactionId);
+			shutdown();
+		}
+		
+		//force an abort return by returning false
+		if ( crashNumber == 9)
+		{
+			System.out.println("Forcing abort for transaction " + transactionId);
+			return false;
+		}
+
+		//prevent 2 prepare statements from racing against each other
+		synchronized(trxPrepared)
+		{
+			//transaction prepared == -1, it is open to grab
+			if (trxPrepared == -1)
+				trxPrepared = transactionId;
+			//not the right transaction id, we return false
+			else if (transactionId != trxPrepared)
+				return false;
+		}
+		
+		//write to disk the whole hash table
+		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
+		
+		System.out.println("is transaction id (with crash) " + transactionId + " ready to commit: " + result + ", crash number " + crashNumber + ", RM number " + RM  ); //TODO: remove this when done
+		
+		//crash after sending response
+		if (crashNumber == 10)
+		{
+			System.out.println("Crashing after sending answer rdy (" + result + ") for transction " + transactionId);
+			
+			//dispatch new thread to force this RM to crash after sending its answer back
+			new Thread(new Runnable()
+			{
+				@Override
+				public void run() 
+				{
+					try 
+					{
+						//sleep 3 seconds
+						Thread.sleep(3000);
+						
+						//force shutdown of RM
+						shutdown();
+					} 
+					catch (InterruptedException e) 
+					{
+					}
+				}
+			}).start();
+		}
+		
+		//server is ready to commit
+		return result;
+	}
 }

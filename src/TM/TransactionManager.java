@@ -36,7 +36,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	public static final int READ = 0;
 	public static final int WRITE = 1;
 	public static final long TTL = 20000; //time to live for transactions : 20 seconds
-	private static final long TIMEOUT = 30000; //30 seconds before time out while calling prepare on the servers (TODO change this)
+	private static final long TIMEOUT = 5000; //5 seconds before time out while calling prepare on the servers (TODO change this)
 	
 	//only 1 transaction may be in the prepared state (-1 => up for grabs)
 	private static Integer trxPrepared = -1;
@@ -120,6 +120,8 @@ public class TransactionManager implements server.ws.ResourceManager
 	public boolean prepare(int transactionId) 
 	{
 		//get transaction
+		if ( !trxns.containsKey(transactionId))
+			return false;
 		Transaction t = trxns.get(transactionId);
 		
 		try
@@ -314,7 +316,7 @@ public class TransactionManager implements server.ws.ResourceManager
 					//sleep timeout amount
 					Thread.sleep(TIMEOUT);
 					
-					//iterate over all threads
+					//iterate over all prepare threads
 					for (int j = 0; j < t.getServers().length; j++)
 						//check if they are still alive
 						if ( prepareThreads[j].isAlive())
@@ -338,7 +340,7 @@ public class TransactionManager implements server.ws.ResourceManager
 				}
 			catch (Exception e){System.out.println("join didnt work");}
 		
-		//check if enforcer is still running and if so, interrupt the thread
+		//check if enforcer is still running and if so, interrupt the thread, we don't need it anymore
 		if (timeoutEnforcer.isAlive())
 			timeoutEnforcer.interrupt();
 		
@@ -1433,5 +1435,509 @@ public class TransactionManager implements server.ws.ResourceManager
 	public void selfdestruct(String which) 
 	{
 		//never called
+	}
+
+	
+/*================================================================= DUPLICATE METHODS FOR FORCED CRASH HANDLING BELOW =================================================================*/	
+	
+	//forces a specific crash on a given RM, the list being
+	//  0 No crashes
+	/*At the TM (coordinator):
+		1 Crash before sending vote request
+		2 Crash after sending vote request and before receiving any replies
+		3 Crash after receiving some replies but not all
+		4 Crash after receiving all replies but before deciding
+		5 Crash after deciding but before sending decision
+		6 Crash after sending some but not all decisions
+		7 Crash after having sent all decisions
+	* At the RMs (participants)
+		8 Crash after receive vote request but before sending answer
+		9  Which answer to send (commit/abort)
+		10 Crash after sending answer
+		11 Crash after receiving decision but before committing/aborting
+		12 Recovery of RM TODO: implement this*/
+	@Override
+	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) {
+		
+		//no crashes, run commit protocol normally
+		if (crashNumber == 0)
+		{
+			System.out.println("Normal behaviour specified for committing with transaction " + transactionId);
+			return commit(transactionId);
+		}
+			
+		
+		 //check if transaction exists
+		 if (!trxns.containsKey(transactionId))
+			  return false;
+		 
+		//get transaction
+		Transaction t = trxns.get(transactionId);
+		t.refreshTimeStamp(); //refresh time stamp so that TTLenforcer won't remove transaction
+		
+		//synchronize t to set isTerminating to true
+		synchronized(t)
+		{
+			if ( t.isTerminating) //to prevent double aborts of a transaction
+				return true;
+			t.isTerminating= true;
+		}
+		
+		//in case of a deadlock call
+		try 
+		{
+			//iterate through all commands
+			for ( String cmd : t.cmds())
+				requestLock(t.tid, cmd); //get locks for each command
+			
+			//alert servers that transaction is beginning
+			alertServersStart(t);
+			
+			//if we get all locks, we may start to execute the commands
+			for ( String cmd : t.cmds())
+			{
+				//execute command
+				executeCommand(t.tid, cmd);
+			}
+			
+			//shutdown middleware before sending vote requests
+			if(crashNumber == 1)
+			{
+				System.out.println("shutting down middleware before sending vote requests for transaction " + transactionId);
+				middleware.shutdown();
+			}
+				
+			
+			//check if servers are ready to commit
+			boolean ready = areServersReadyToCommitWithCrash(t, crashNumber, RM);
+			
+			//have decided, but before sending reply
+			if(crashNumber == 5)
+			{
+				System.out.println("shutting down middleware after deciding but before sending reply for transaction " + transactionId);
+				middleware.shutdown();
+			}
+				
+			
+			//if not ready
+			if (!ready)
+			{
+				synchronized(t)
+				{
+					//set is terminating false, the abort call will need this field
+					t.isTerminating = false;
+				}
+				
+				//we abort
+				abortWithCrash(t.tid, crashNumber, RM);
+				return false; //! (not) because the user asked to commit, so true to abort = false for commit
+			}
+			
+			//alert servers transaction has committed
+			alertServersCommitWithCrash(t, crashNumber, RM);
+			
+			//crash after sending all decisions
+			if (crashNumber == 7)
+			{
+				System.out.println("crashing middleware after sending commit decision to all servers for transaction " + transactionId);
+				middleware.crash();
+			}
+				
+			
+			//commit locally
+			fm.changeMasterToShadowCopy();
+			
+			//reset transaction lock/object
+			trxPrepared = -1;
+			
+			//every operation committed to every server, we unlock all locks
+			lm.UnlockAll(t.tid);
+			
+			//remove transaction from currently executing transactions set
+			trxns.remove(t.tid);	
+		} 
+		catch (DeadlockException e) 
+		{
+			//we abort the transaction
+			//e.printStackTrace();
+			System.out.println("Deadlock: Transaction " + t.tid + " will abort.");
+			abortWithCrash(transactionId, crashNumber, RM);
+			return false;
+		}
+		
+		//return true to user, everything committed fine
+		return true;
+	}
+	
+	//forces a specific crash on a given RM, the list being
+		//  0 No crashes
+		/*At the TM (coordinator):
+			1 Crash before sending vote request
+			2 Crash after sending vote request and before receiving any replies
+			3 Crash after receiving some replies but not all
+			4 Crash after receiving all replies but before deciding
+			5 Crash after deciding but before sending decision
+			6 Crash after sending some but not all decisions
+			7 Crash after having sent all decisions
+		* At the RMs (participants)
+			8 Crash after receive vote request but before sending answer
+			9  Which answer to send (commit/abort)
+			10 Crash after sending answer
+			11 Crash after receiving decision but before committing/aborting
+			12 Recovery of RM TODO: implement this*/
+	private boolean areServersReadyToCommitWithCrash(Transaction t, int crashNumber, int RM)
+	{
+		//array list of servers with a yes vote
+		ArrayList<Server> yes = new ArrayList<Server>();
+		
+		//array of threads to service each server
+		Thread[] prepareThreads = new Thread[t.getServers().length + 1];
+		
+		//counter for the array prepareThreads
+		int i = 0;
+		
+		//data structure for middle ware to say if it is ready to abort
+		final boolean[] mwReady = new boolean[1]; mwReady[0] = false;
+		
+		//create new thread to prepare the middle ware
+		prepareThreads[i] = new Thread(new Runnable()
+		{
+			@Override
+			public void run() 
+			{
+				//check if middleware is ready to commit
+				mwReady[0] = prepareWithCrash(t.tid, crashNumber, RM);
+			}
+		});
+		//start middle ware prepare thread
+		prepareThreads[i].start();
+		
+		//iterate over all servers for the transactions
+		for ( Server s : t.getServers())
+		{
+			//increment counter
+			i++;
+			
+			//create new thread
+			prepareThreads[i] = new Thread(new Runnable()
+				{
+					@Override
+					public void run() 
+					{
+						try
+						{
+							boolean rdy = false;
+							switch (RM)
+							{
+								case 1: if (s == Server.Flight)
+										{
+											System.out.println("Calling flight server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										}
+										else Main.services.get(s).proxy.prepare(t.tid);
+										break;
+								case 2: if (s == Server.Car) 
+										{
+											System.out.println("Calling car server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										}
+										else Main.services.get(s).proxy.prepare(t.tid);
+										break;
+								case 3: if (s == Server.Hotel) 
+										{
+											System.out.println("Calling room server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										}
+										else Main.services.get(s).proxy.prepare(t.tid);
+										break;		
+							}
+							System.out.println("server " + s.toString() + " ready to commit? " + rdy);
+							if (rdy)
+								synchronized(yes)
+								{
+									yes.add(s);
+								}
+						} 
+						catch(Exception e)
+						{
+							//server is not ready
+							System.out.println("Time out for prepare call to server : " + s.toString());
+							System.out.println("Calling abort of transaction " + t.tid + "  on the server : " + s.toString());
+							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						}
+						
+					}
+					
+				});
+			
+			//run the thread
+			prepareThreads[i].start();
+		}
+		
+		//create thread to enforce timeout mechanism for the prepare threads array
+		Thread timeoutEnforcer = new Thread(new Runnable()
+		{
+			@Override
+			public void run() 
+			{
+				try
+				{
+					//sleep timeout amount
+					Thread.sleep(TIMEOUT);
+					
+					//iterate over all prepare threads
+					for (int j = 0; j < t.getServers().length; j++)
+						//check if they are still alive
+						if ( prepareThreads[j].isAlive())
+							//kill the thread
+							prepareThreads[j].interrupt();
+				}
+				catch(Exception e)
+				{
+					System.out.println("timeoutEnforcer for prepareThreads has been terminated prematurely");
+				}
+			}
+		});
+		
+		//start the enforcer thread
+		timeoutEnforcer.start();
+		
+		//crash before sending any requests
+		if ( crashNumber == 2)
+		{
+			System.out.println("shutting down middleware before sending any requests for transaction " + t.tid);
+			middleware.crash();
+		}
+		
+		
+		//iterate over all threads and attempt to join with each of them
+		for( i=0; i < t.getServers().length + 1; i++) 
+			try { 
+					prepareThreads[i].join(); 
+					
+					//crash after receiving a request
+					if(crashNumber == 3)
+					{
+						System.out.println("shutting down middleware after receving 1 vote response for transaction " + t.tid);
+						middleware.crash();
+					}
+						
+				}
+			catch (Exception e){System.out.println("join didnt work");}
+		
+		//check if enforcer is still running and if so, interrupt the thread, we don't need it anymore
+		if (timeoutEnforcer.isAlive())
+			timeoutEnforcer.interrupt();
+		
+		//crash after receiving all replies, but have not yet decided
+		if(crashNumber == 4)
+		{
+			System.out.println("shutting down middleware after receiving all vote replies but before sending any decision for transaction " + t.tid);
+			middleware.crash();
+		}
+			
+		
+		//TODO: remove this afterwards
+		/*System.out.println("Prepare results :");
+		System.out.println("nubmer of servers involved in transaction " + t.getServers().length);
+		for (Server s : yes)
+			System.out.println("Server " + s.toString() + " is ready to commit");
+		System.out.println("middle ware ready to commit " + mwReady[0]);*/
+	
+		//at this point either all threads terminated and answered yes, or at least one of them said no or timed out. In either case,
+		//all timed out or no server responses aborted
+		
+		//check whether |yes| != |t.servers| & middle ware is ready
+		if ( yes.size() != t.getServers().length && mwReady[0])
+		{
+			/*ArrayList<Server> serversToAbort = new ArrayList<Server>();
+			
+			for(i = 0; i < yes.length; i++)
+				if (yes[i] != null)
+					serversToAbort.add(yes[i]);*/
+			
+			//change servers in transaction that need to be notified for aborting (all servers that voted yes
+			t.servers = yes;
+			
+			//not all servers are ready to commit
+			return false;
+		}
+		
+		//|yes| == |t.servers|, all servers voted yes and are therfore ready to commit
+		return true;
+	}
+	
+	//Aborts the given transaction and rollbacks all cmds that have been executed
+	public boolean abortWithCrash(int transactionId, int crashNumber, int RM) 
+	{
+		 //check if transaction exists
+		 if (!trxns.containsKey(transactionId))
+			  return false;
+		 
+		 //get transaction
+		 Transaction t = trxns.get(transactionId);
+		 t.refreshTimeStamp();
+		 
+		//synchronize t to set isAborting to true
+		synchronized(t)
+		{
+			if ( t.isTerminating) //to prevent double aborts/commits of a transaction
+				return true;
+			t.isTerminating= true;
+		}
+		 
+		//clean up resources
+		for ( String cmd : t.cmds())
+			cleanup(cmd);
+		
+		 //unlock all resources held by transaction, if any
+		 lm.UnlockAll(transactionId);
+		 
+		//reset trxPrepared
+		 synchronized ( trxPrepared)
+		 {
+			 if ( t.tid == trxPrepared)
+					trxPrepared = -1;
+				 	//this allows another transaction to overwrite the current shadow file so no harm is done
+		 }
+		 
+		 //call all servers to tell them to abort
+		 alertServersAbortWithCrash(t, crashNumber, RM);
+		 
+		//crash after sending all decisions
+		if (crashNumber == 7)
+		{
+			System.out.println("shutting down middleware after sending abort decision to all servers for transaction " + t.tid);
+			middleware.crash();
+		}
+		 
+		 //delete transaction from pool of currently executing transactions
+		 trxns.remove(transactionId);
+	
+		 //abort successfully completed
+		return true;
+	}
+	
+	//alerts all the servers needed by the transaction that the transaction is aborting
+	private void alertServersAbortWithCrash(Transaction t, int crashNumber, int RM) 
+	{
+		for( Server s : t.getServers())
+		{
+			//check if RM 
+			switch (RM)
+			{
+				//check if RM number is the same as one of the servers, if so call abortwithcrash on that server
+				case 1: if (s == Server.Flight) 
+						{											
+							System.out.println("Calling flight server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.abort(t.tid); 
+						break;
+				case 2: if (s == Server.Car) 
+						{
+							System.out.println("Calling car server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.abort(t.tid); 
+						break;	
+				case 3: if (s == Server.Hotel) 
+						{
+							System.out.println("Calling room server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.abort(t.tid); 
+						break;	
+			}
+			
+			//crash after sending a decision
+			if (crashNumber == 6)
+			{
+				System.out.println("shutting down middleware after sending an abort decision to server " + s.toString() + "  for transaction " + t.tid);
+				middleware.crash();
+			}
+		}
+			
+	}
+	
+	//alerts all the servers needed by the transaction that the transaction is committing
+	private void alertServersCommitWithCrash(Transaction t, int crashNumber, int RM) 
+	{
+		for( Server s : t.getServers())
+		{
+			//check if RM is involved in transaction
+			switch (RM)
+			{
+				//check if RM number is the same as one of the servers, if so call commitWithCrash on that server
+				case 1: if (s == Server.Flight) 
+						{
+							System.out.println("Calling flight server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.commit(t.tid); 
+						break;
+				case 2: if (s == Server.Car) 
+						{
+							System.out.println("Calling car server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.commit(t.tid); 
+						break;	
+				case 3: if (s == Server.Hotel) 
+						{
+							System.out.println("Calling room server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+						}
+						else Main.services.get(s).proxy.commit(t.tid); 
+						break;	
+			}
+			
+			//crash after sending a decision
+			if (crashNumber == 6)
+			{
+				System.out.println("shutting down middleware after sending a commit decision to server " + s.toString() + "  for transaction " + t.tid);
+				middleware.crash();
+			}
+		}
+	}
+
+	@Override
+	public boolean prepareWithCrash(int transactionId, int crashNumber, int RM) 
+	{
+		//get transaction
+		if ( !trxns.containsKey(transactionId))
+			return false;
+		Transaction t = trxns.get(transactionId);
+		
+		try
+		{
+			//TODO: test this method with commit but abort afterwards
+			
+			//prevent 2 prepare statements from racing against each other
+			synchronized(trxPrepared)
+			{
+				//transaction prepared == -1, it is open to grab
+				if (trxPrepared == -1)
+					trxPrepared = t.tid;
+				//not the right transaction id, middle ware can't commit
+				else if (t.tid != trxPrepared)
+					return false;
+			}
+			
+			//write to disk the whole hash table of customers. (Don't need to serialize the 
+			// trxns hashtable since if middleware fails, all transactions will automatically abort
+			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
+			//update approach
+			fm.writeMainMemoryToShadow(customers);
+			
+			//server is ready to commit
+			return true;
+		}
+		catch(Exception e)
+		{
+			//middle ware is not ready
+			System.out.println("Time out for prepare call to middleware, transaction " + t.tid + " will abort.");
+			return false;
+		}
 	}
 }
