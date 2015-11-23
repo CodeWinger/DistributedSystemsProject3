@@ -50,6 +50,9 @@
 Things to do :
 
  -> rollback operations in abort protocol for RM's to replace the hashtable of items as it was originally
+ 	-> other possibility : shallow copy of current hashtable of RM for each transaction, when executing Cmds from middleware,
+ 		add them to copied hastable, after receiving prepare, write copied hashtable to disk, when commit, set new hashtable of
+ 		server to the copied version, change master pointer to shadow file
  -> implement timeouts for sending/receiving decisions from middleware to automatically abort if we pass a waiting threshold (like case 2,3,4)
  -> handle incorrect timeouts, see c) below
  -> add transaction-based shadowing technique for writing to disk, keep in memory latest commmitted transaction of a given shadow/master file
