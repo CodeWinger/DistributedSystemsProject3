@@ -33,6 +33,7 @@ import filemanager.FileManager;
 public class ResourceManagerImpl implements server.ws.ResourceManager {
     
     protected RMHashtable m_itemHT = new RMHashtable();
+    protected RMHashtable tempHT = null;
     
     //resources needed to reboot server
     private FileManager fm;
@@ -517,7 +518,9 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	
 	@Override
 	public boolean startid(int tid) {
-		// TODO Auto-generated method stub
+	    //keep prior version
+        tempHT = (RMHashtable) m_itemHT.clone();
+
 		System.out.println("Transaction initiated : " + tid);
 		return true;
 	}
@@ -600,10 +603,12 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			//reset trxPrepared
 			trxPrepared = -1;
 			
-			boolean result = fm.changeMasterToShadowCopy();
+			boolean result = fm.changeMasterToShadowCopy(transactionId);
 			System.out.println("Transaction committed : " + transactionId);
 			return result;
 		}
+		
+		
 		
 	}
 
@@ -677,7 +682,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			//reset trxPrepared
 			trxPrepared = -1;
 			
-			boolean result = fm.changeMasterToShadowCopy();
+			boolean result = fm.changeMasterToShadowCopy(transactionId);
 			System.out.println("TransactionWitCrash committed : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
 			return result;
 		}

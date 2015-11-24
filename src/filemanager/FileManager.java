@@ -23,8 +23,15 @@ public class FileManager
 	//sets the current Master file between f1 and f2
 	private File currentMasterFile;
 	private File shadowFile;
+	private int lastCommittedTxn = -1;
 	
-	//constructs the new files for stable storage by checking whether or not the master record exists and setting files accordingly
+	public void resetLastCommittedTxn(int tid) {
+	    //if we start another txn with tid, we reset the last commited txn
+	    if(this.lastCommittedTxn == tid)
+	        this.lastCommittedTxn = -1;
+    }
+
+    //constructs the new files for stable storage by checking whether or not the master record exists and setting files accordingly
 	public FileManager(String masterFile, String file1, String file2)
 	{
 		//create new file elements
@@ -172,9 +179,17 @@ public class FileManager
 	}
 	
 	//exchanges shadow and current master values and writes to disk on the master pointer file
-	public boolean changeMasterToShadowCopy()
+	public boolean changeMasterToShadowCopy(int tid)
 	{
 		PrintWriter writer;
+		
+		if(tid == lastCommittedTxn) {
+		    return true;
+		}
+		else {
+		    lastCommittedTxn = tid;
+		}
+		
 		try {
 			//get writer object
 			writer = new PrintWriter(masterFilePointer, "UTF-8");

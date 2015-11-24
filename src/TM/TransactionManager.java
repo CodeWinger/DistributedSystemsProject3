@@ -214,7 +214,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			alertServersCommit(t);
 			
 			//commit locally
-			fm.changeMasterToShadowCopy();
+			fm.changeMasterToShadowCopy(transactionId);
 			
 			//reset transaction lock/object
 			trxPrepared = -1;
@@ -317,7 +317,7 @@ public class TransactionManager implements server.ws.ResourceManager
 					Thread.sleep(TIMEOUT);
 					
 					//iterate over all prepare threads
-					for (int j = 0; j < t.getServers().length; j++)
+					for (int j = 0; j < t.getServers().length+1; j++)
 						//check if they are still alive
 						if ( prepareThreads[j].isAlive())
 							//kill the thread
@@ -1545,7 +1545,7 @@ public class TransactionManager implements server.ws.ResourceManager
 				
 			
 			//commit locally
-			fm.changeMasterToShadowCopy();
+			fm.changeMasterToShadowCopy(transactionId);
 			
 			//reset transaction lock/object
 			trxPrepared = -1;

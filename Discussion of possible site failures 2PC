@@ -46,6 +46,7 @@
 
 	12 Recovery of RM; especially if it voted yes for a transaction but has not yet committed it.
 		feature that can be omitted since we can simulate it by hand?
+		add method last pushed trxn id to recovering RM from middleware, if not
 
 Things to do :
 
@@ -56,10 +57,12 @@ Things to do :
  -> implement timeouts for sending/receiving decisions from middleware to automatically abort if we pass a waiting threshold (like case 2,3,4)
  -> handle incorrect timeouts, see c) below
  -> add transaction-based shadowing technique for writing to disk, keep in memory latest commmitted transaction of a given shadow/master file
- -> code procedure for RM to query middleware to get latest transaction committed and handle cases appropriately (yes -> change pointer, no -> do nothing) (ask Yousuf)
+ -> code procedure for RM to query middleware to get latest transaction committed and handle cases appropriately (yes -> change pointer, no -> do nothing) (do what ever you want, safest -> commit)
 
  Not related :
  -> add try/catch block for forcing shutdowns of servers for every call made by the middleware to the servers similar to the client's solution
+
+ --> clietn restard server?
 
 c) Note that your implementation should also be able to handle incorrect timeouts. For instance, a
 participant times out while waiting for the VOTE-REQUEST and hence aborts the transaction,
@@ -68,7 +71,7 @@ to handle requests it does not expect
 
 Assumptions:
 
-1) only 1 transaction may be in the prepared state
+1) only 1 transaction may be in the prepared state - ok
 2) participant voted yes and coordinator crashed, we allow indefinite wait for yes respondents
 3) only 1 middleware and no-one can communicate with flight, car and room server alone. Only 1 coordinator allowed
 
@@ -76,3 +79,10 @@ Ask Yousuf:
 	RM to query middleware to get latest transaction committed, need to implement this? (2 way communication now). Any other way
 	need to implement 12?
 	ask about assumptions
+
+
+	synchronize commits at middleware
+
+
+
+	12) read hashtable back from RM and reset global one to this value. Change master file pointer to shadow file
