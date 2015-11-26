@@ -25,7 +25,11 @@ public class FileManager
 	private File shadowFile;
 	private int lastCommittedTxn = -1;
 	
-	public void resetLastCommittedTxn(int tid) {
+	public int getLastCommittedTxn() {
+        return lastCommittedTxn;
+    }
+
+    public void resetLastCommittedTxn(int tid) {
 	    //if we start another txn with tid, we reset the last commited txn
 	    if(this.lastCommittedTxn == tid)
 	        this.lastCommittedTxn = -1;

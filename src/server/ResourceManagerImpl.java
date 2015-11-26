@@ -32,6 +32,7 @@ import filemanager.FileManager;
 @WebService(endpointInterface = "server.ws.ResourceManager")
 public class ResourceManagerImpl implements server.ws.ResourceManager {
     
+    private boolean isOnline = false;
     protected RMHashtable m_itemHT = new RMHashtable();
     protected RMHashtable tempHT = null;
     
@@ -111,6 +112,29 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
         }
     }
     
+    /**
+     * This method should be called after the RM restarts and before it handles
+     * any other call
+     * @param lastCommitedTxn the last committed transaction, sent by the middleware
+     * @return true on successful recovery and synch, false otherwise
+     */
+    @Override
+    public boolean recover(int lastCommitedTxn) {
+        
+        //TODO 
+        
+        isOnline = true;
+        
+        return true;
+    }
+    
+    public boolean isServerOnline() {
+        //checks if server is online and in synch with other servers
+        //TODO find a way to have isOnline set to true at initial start
+        //      and somehow set to false when crashing
+        //return isOnline;
+        return true;
+    }
     
     // Basic operations on ReservableItem //
     
@@ -208,6 +232,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     @Override
     public boolean addFlight(int id, int flightNumber, 
                              int numSeats, int flightPrice) {
+        if(!isServerOnline()) return false;
         Trace.info("RM::addFlight(" + id + ", " + flightNumber 
                 + ", $" + flightPrice + ", " + numSeats + ") called.");
         Flight curObj = (Flight) readData(id, Flight.getKey(flightNumber));
@@ -233,17 +258,20 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
     @Override
     public boolean deleteFlight(int id, int flightNumber) {
+        if(!isServerOnline()) return false;
         return deleteItem(id, Flight.getKey(flightNumber));
     }
 
     // Returns the number of empty seats on this flight.
     @Override
     public int queryFlight(int id, int flightNumber) {
+        if(!isServerOnline()) return 0;
         return queryNum(id, Flight.getKey(flightNumber));
     }
 
     // Returns price of this flight.
     public int queryFlightPrice(int id, int flightNumber) {
+        if(!isServerOnline()) return 0;
         return queryPrice(id, Flight.getKey(flightNumber));
     }
 
@@ -291,6 +319,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // its current price.
     @Override
     public boolean addCars(int id, String location, int numCars, int carPrice) {
+        if(!isServerOnline()) return false;
         Trace.info("RM::addCars(" + id + ", " + location + ", " 
                 + numCars + ", $" + carPrice + ") called.");
         Car curObj = (Car) readData(id, Car.getKey(location));
@@ -317,18 +346,21 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Delete cars from a location.
     @Override
     public boolean deleteCars(int id, String location) {
+        if(!isServerOnline()) return false;
         return deleteItem(id, Car.getKey(location));
     }
 
     // Returns the number of cars available at a location.
     @Override
     public int queryCars(int id, String location) {
+        if(!isServerOnline()) return 0;
         return queryNum(id, Car.getKey(location));
     }
 
     // Returns price of cars at this location.
     @Override
     public int queryCarsPrice(int id, String location) {
+        if(!isServerOnline()) return 0;
         return queryPrice(id, Car.getKey(location));
     }
     
@@ -340,6 +372,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // its current price.
     @Override
     public boolean addRooms(int id, String location, int numRooms, int roomPrice) {
+        if(!isServerOnline()) return false;
         Trace.info("RM::addRooms(" + id + ", " + location + ", " 
                 + numRooms + ", $" + roomPrice + ") called.");
         Room curObj = (Room) readData(id, Room.getKey(location));
@@ -366,18 +399,21 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Delete rooms from a location.
     @Override
     public boolean deleteRooms(int id, String location) {
+        if(!isServerOnline()) return false;
         return deleteItem(id, Room.getKey(location));
     }
 
     // Returns the number of rooms available at a location.
     @Override
     public int queryRooms(int id, String location) {
+        if(!isServerOnline()) return 0;
         return queryNum(id, Room.getKey(location));
     }
     
     // Returns room price at this location.
     @Override
     public int queryRoomsPrice(int id, String location) {
+        if(!isServerOnline()) return 0;
         return queryPrice(id, Room.getKey(location));
     }
 
@@ -386,6 +422,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
     @Override
     public int newCustomer(int id) {
+        if(!isServerOnline()) return 0;
         Trace.info("INFO: RM::newCustomer(" + id + ") called.");
         // Generate a globally unique Id for the new customer.
         int customerId = Integer.parseInt(String.valueOf(id) +
@@ -400,6 +437,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // This method makes testing easier.
     @Override
     public boolean newCustomerId(int id, int customerId) {
+        if(!isServerOnline()) return false;
         Trace.info("INFO: RM::newCustomer(" + id + ", " + customerId + ") called.");
         Customer cust = (Customer) readData(id, Customer.getKey(customerId));
         if (cust == null) {
@@ -417,6 +455,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Delete customer from the database. 
     @Override
     public boolean deleteCustomer(int id, int customerId) {
+        if(!isServerOnline()) return false;
         Trace.info("RM::deleteCustomer(" + id + ", " + customerId + ") called.");
         Customer cust = (Customer) readData(id, Customer.getKey(customerId));
         if (cust == null) {
@@ -452,6 +491,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Returns null if the customer doesn't exist. 
     // Returns empty RMHashtable if customer exists but has no reservations.
     public RMHashtable getCustomerReservations(int id, int customerId) {
+        if(!isServerOnline()) return null;
         Trace.info("RM::getCustomerReservations(" + id + ", " 
                 + customerId + ") called.");
         Customer cust = (Customer) readData(id, Customer.getKey(customerId));
@@ -467,6 +507,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Return a bill.
     @Override
     public String queryCustomerInfo(int id, int customerId) {
+        if(!isServerOnline()) return "";
         Trace.info("RM::queryCustomerInfo(" + id + ", " + customerId + ") called.");
         Customer cust = (Customer) readData(id, Customer.getKey(customerId));
         if (cust == null) {
@@ -485,6 +526,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Add flight reservation to this customer.  
     @Override
     public boolean reserveFlight(int id, int customerId, int flightNumber) {
+        if(!isServerOnline()) return false;
         return reserveItem(id, customerId, 
                 Flight.getKey(flightNumber), String.valueOf(flightNumber));
     }
@@ -492,12 +534,14 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     // Add car reservation to this customer. 
     @Override
     public boolean reserveCar(int id, int customerId, String location) {
+        if(!isServerOnline()) return false;
         return reserveItem(id, customerId, Car.getKey(location), location);
     }
 
     // Add room reservation to this customer. 
     @Override
     public boolean reserveRoom(int id, int customerId, String location) {
+        if(!isServerOnline()) return false;
         return reserveItem(id, customerId, Room.getKey(location), location);
     }
     
@@ -511,15 +555,18 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public int start() {
-		// TODO Auto-generated method stub
+	    if(!isServerOnline()) return 0;
 		System.out.println("Transaction initiated");
 		return 0;
 	}
 	
 	@Override
 	public boolean startid(int tid) {
+	    if(!isServerOnline()) return false;
 	    //keep prior version
         tempHT = (RMHashtable) m_itemHT.clone();
+        //reset lastCommitedTxn of file manager
+        fm.resetLastCommittedTxn(tid);
 
 		System.out.println("Transaction initiated : " + tid);
 		return true;
@@ -527,7 +574,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean shutdown() {
-		// TODO Auto-generated method stub
+	    if(!isServerOnline()) return false;
 		System.out.println("Shutting down...");
 		System.exit(0);
 		return false;
@@ -535,6 +582,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean isFlightReserved(int id, int fid) {
+	    if(!isServerOnline()) return false;
 		 ReservableItem i = (ReservableItem) readData(id, "" + fid);
 		 if ( i == null)
 			 return false;
@@ -544,6 +592,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean isCarReserved(int id, String location) {
+	    if(!isServerOnline()) return false;
 		 ReservableItem i = (ReservableItem) readData(id, location);
 		 if ( i == null)
 			 return false;
@@ -553,6 +602,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean isRoomReserved(int id, String location) {
+	    if(!isServerOnline()) return false;
 		 ReservableItem i = (ReservableItem) readData(id, location);
 		 if ( i == null)
 			 return false;
@@ -567,6 +617,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	//writes the current values in its hashtable in stable storage,awaiting the commit request
 	public boolean prepare(int transactionId) 
 	{
+	    if(!isServerOnline()) return false;
 		System.out.println("preparing transaction id  : " + transactionId ); //TODO: remove this when done
 		
 		//prevent 2 prepare statements from racing against each other
@@ -593,6 +644,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	//changes the shadow and master copy in the file manager, this action should be atomic
 	public boolean commit(int transactionId) 
 	{
+	    if(!isServerOnline()) return false;
 		//get lock on transaction object
 		synchronized(trxPrepared)
 		{
@@ -616,6 +668,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 	//aborts the transaction, either forced (deadlock) or by user
 	public boolean abort(int transactionId) 
 	{
+	    if(!isServerOnline()) return false;
 		//check here if this is the transaction that was prepared, if so reset the trxPrepared value
 		if ( trxPrepared == transactionId ) 
 		{
@@ -664,7 +717,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			12 Recovery of RM*/
 	@Override
 	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) {
-		
+	    if(!isServerOnline()) return false;
 		//Crash after receiving decision but before committing/aborting
 		if (crashNumber == 11)
 		{
@@ -690,7 +743,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean abortWithCrash(int transactionId, int crashNumber, int RM) {
-		
+	    if(!isServerOnline()) return false;
 		//Crash after receiving decision but before committing/aborting
 		if (crashNumber == 11)
 		{
@@ -716,7 +769,8 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 
 	@Override
 	public boolean prepareWithCrash(int transactionId, int crashNumber, int RM) {
-		System.out.println("preparing transaction id with crash  : " + transactionId  + ", crash number " + crashNumber + ", RM number " + RM); //TODO: remove this when done
+	    if(!isServerOnline()) return false;
+	    System.out.println("preparing transaction id with crash  : " + transactionId  + ", crash number " + crashNumber + ", RM number " + RM); //TODO: remove this when done
 		
 		//Crash after receive vote request but before sending answer
 		if ( crashNumber == 8)

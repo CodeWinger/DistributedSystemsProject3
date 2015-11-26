@@ -48,6 +48,8 @@ public class TransactionManager implements server.ws.ResourceManager
 	private static FileManager fm;
 	static Thread enforcer;
 	
+	//holds threads that will keep calling recover on their server (0:flight,1:car,2:hotel)
+	private static Thread[] recoveryThreads = new Thread[3];
 	
 	//hashmap of current transactions
 	static final HashMap<Integer, Transaction> trxns = new HashMap<Integer,Transaction>(1000);
@@ -55,7 +57,41 @@ public class TransactionManager implements server.ws.ResourceManager
 	//hashmap of current customers
 	static HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
 	
-	
+	private void notifyDeadRM(final Server s) {
+        // TODO starts thread that keeps calling a method on a server as it recovers
+	    //to make sure he is synchronized as he restarts
+	    
+	    final int lastCommittedTxn;
+	    if (fm.getLastCommittedTxn()>=0) {
+	        lastCommittedTxn = fm.getLastCommittedTxn();
+        } else {
+            //no committed txns yet
+            return;
+        }
+        
+	    if (!recoveryThreads[s.ordinal()].isAlive()) {
+	        recoveryThreads[s.ordinal()] = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    boolean isOnline = false;
+                    //call appropriate method on RM continuously
+                    while (!isOnline) {
+                        try {
+                            Thread.sleep(500);
+                            //call waking up RM to synch it with last commited txn
+                            Main.services.get(s).proxy.recover(lastCommittedTxn);
+                            isOnline = true;
+                        } catch (Exception e) {
+                            continue;
+                        }
+
+                    }
+                }
+            });
+	        recoveryThreads[s.ordinal()].start();
+        }
+        
+    }
 	
 	//returns instance of the transaction manager
 	public static TransactionManager getInstance(Main main, FileManager fileManager)
@@ -546,7 +582,7 @@ public class TransactionManager implements server.ws.ResourceManager
 		 //unlock all resources held by transaction, if any
 		 lm.UnlockAll(transactionId);
 		 
-		//reset trxPrepared
+		 //reset trxPrepared
 		 synchronized ( trxPrepared)
 		 {
 			 if ( t.tid == trxPrepared)
@@ -603,7 +639,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item flight = getFlight(flightNumber, t);
+		  Item flight = null;
+        try {
+            flight = getFlight(flightNumber, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Flight);
+            abort(id);
+            return false;
+            //TODO add more behavior
+            
+        }
 		  flight.count += numSeats;
 		  flight.price = flightPrice > 0 ? flightPrice : flight.price;
 		  flight.isDeleted = false;
@@ -613,7 +660,8 @@ public class TransactionManager implements server.ws.ResourceManager
 		  return true;
 	}
 
-	@Override
+
+    @Override
 	public boolean deleteFlight(int id, int flightNumber) 
 	{
 		 //check if transaction exists
@@ -624,7 +672,17 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		 //update write set of transaction with modified values
-		 Item flight = getFlight(flightNumber, t);
+		 Item flight = null;
+		 try {
+            flight = getFlight(flightNumber, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Flight);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		
 		 //check if there are reservations on the flight
 		 if ( !flight.isReserved)
@@ -650,7 +708,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		 Item flight = getFlight(flightNumber, t);
+		 Item flight = null; 
+		 
+		 try {
+            flight = getFlight(flightNumber, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Flight);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Flight);
@@ -673,7 +742,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		 Item flight = getFlight(flightNumber, t);
+		 Item flight = null;
+		 
+		 try {
+            flight = getFlight(flightNumber, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Flight);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Flight);
@@ -696,7 +776,19 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item car = getCar(location, t);
+		  Item car = null;
+		  
+		  try {
+            car = getCar(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Car);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
+		  
 		  car.count += numCars;
 		  car.price = carPrice > 0 ? carPrice : car.price;
 		  car.isDeleted = false;
@@ -717,7 +809,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item car = getCar(location, t);
+		  Item car = null;
+		  
+		  try {
+            car = getCar(location, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Car);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		  
 		  //check if there are reservations on the cars
 			 if ( !car.isReserved)
@@ -746,7 +849,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		 Item car = getCar(location, t);
+		 Item car = null; 
+		 
+		 try {
+            car = getCar(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Car);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Car);
@@ -772,7 +886,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item car = getCar(location, t);
+		  Item car = null;
+		  
+		  try {
+            car = getCar(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Car);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Car);
@@ -794,7 +919,20 @@ public class TransactionManager implements server.ws.ResourceManager
 		  //get transaction and update its structures
 		  Transaction t = trxns.get(id);
 		  
-		  Item room = getRoom(location, t);
+		  Item room = null;
+		  
+		  try {
+            room = getRoom(location, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Hotel);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
+		  
+		  
 		  room.count += numRooms;
 		  room.price = roomPrice > 0 ? roomPrice : room.price;
 		  room.isDeleted = false;
@@ -816,7 +954,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item room = getRoom(location, t);
+		  Item room = null;
+		  
+		  try {
+            room = getRoom(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Hotel);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		  
 		  //check if there are reservations on the rooms
 			 if ( !room.isReserved)
@@ -841,7 +990,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item room = getRoom(location, t);
+		  Item room = null;
+		  
+		  try {
+            room = getRoom(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Hotel);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Hotel);
@@ -864,7 +1024,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item room = getRoom(location, t);
+		  Item room = null;
+		  
+		  try {
+            room = getRoom(location, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Hotel);
+            abort(id);
+            return 0;
+            //TODO add more behavior
+        }
 		 
 		 //update operations on transactions
 		  t.addServer(Server.Hotel);
@@ -1131,7 +1302,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item flight = getFlight(flightNumber, t);
+		  Item flight = null;
+		  
+		  try {
+            flight = getFlight(flightNumber, t);
+        } catch (Exception e) {
+            //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Flight);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		  
 		  //get customer
 		  Customer c = customers.get(customerId);
@@ -1174,7 +1356,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item car = getCar(location, t);
+		  Item car = null; 
+		  
+		  try {
+            car = getCar(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Car);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		  
 		  //get customer
 		  Customer c = customers.get(customerId);
@@ -1217,7 +1410,18 @@ public class TransactionManager implements server.ws.ResourceManager
 		  Transaction t = trxns.get(id);
 		  
 		  //update write set of transaction with modified values
-		  Item room = getCar(location, t);
+		  Item room = null; 
+		  
+		  try {
+            room = getRoom(location, t);
+        } catch (Exception e) {
+          //Server crashed and remote method call failed
+            System.out.println("RM has crashed... aborting transaction "+id);
+            notifyDeadRM(Server.Hotel);
+            abort(id);
+            return false;
+            //TODO add more behavior
+        }
 		  
 		  //get customer
 		  Customer c = customers.get(customerId);
@@ -1940,4 +2144,10 @@ public class TransactionManager implements server.ws.ResourceManager
 			return false;
 		}
 	}
+
+    @Override
+    public boolean recover(int lastCommitedTxn) {
+        // TODO Auto-generated method stub
+        return false;
+    }
 }

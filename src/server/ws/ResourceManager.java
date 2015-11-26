@@ -187,6 +187,9 @@ public interface ResourceManager {
     
     @WebMethod
     public boolean prepareWithCrash(int transactionId, int crashNumber, int RM);
+
+    @WebMethod
+    public boolean recover(int lastCommitedTxn);
     
    // @WebMethod
    // public boolean setFileToRead(String file);

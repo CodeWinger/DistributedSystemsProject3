@@ -522,5 +522,11 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		return false;
 	}
 
+    @Override
+    public boolean recover(int lastCommitedTxn) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
 	
 }
