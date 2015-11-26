@@ -121,7 +121,15 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     @Override
     public boolean recover(int lastCommitedTxn) {
         
-        //TODO 
+        if(lastCommitedTxn == 0) {
+            //initial activation, sent from middleware constructor
+            isOnline = true;
+            
+            return true;
+        }
+            
+        
+        //TODO implement recovery code
         
         isOnline = true;
         
@@ -130,10 +138,11 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     
     public boolean isServerOnline() {
         //checks if server is online and in synch with other servers
-        //TODO find a way to have isOnline set to true at initial start
-        //      and somehow set to false when crashing
-        //return isOnline;
-        return true;
+        //      isOnline is set to false initially and MW constructor calls recover to set it to true
+        //      if RM crashes, it is false until MW calls recover, 
+        //      while set to false server refuses all method calls (returns false or zero) 
+        return isOnline;
+        //return true;
     }
     
     // Basic operations on ReservableItem //

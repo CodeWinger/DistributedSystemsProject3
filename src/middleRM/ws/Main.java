@@ -95,6 +95,11 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		
 		//TODO: get file names
 		tm = TransactionManager.getInstance(this, new FileManager(directory + masterFile, directory + currentFile, directory + shadowFile));
+	
+		//set all servers online initially
+		services.get(Server.Flight).proxy.recover(0);
+		services.get(Server.Car).proxy.recover(0);
+		services.get(Server.Hotel).proxy.recover(0);
 	}
 	
 	public static void main(String[] args) throws Exception 
