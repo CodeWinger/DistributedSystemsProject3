@@ -69,10 +69,10 @@ public class Client extends WSClient {
         {System.out.println("file not found");}
         System.out.println("Client Interface");
         System.out.println("Type \"help\" for list of supported commands");
-      try{  
+      
         while (true) {
-        
-            try {
+        	try{  
+        		try {
                 //read the next command
                 command = stdin.readLine();
                 
@@ -835,11 +835,12 @@ public class Client extends WSClient {
                 break;
            }
         }
-	}
+	
 	catch(Exception e)
 	{
 		System.out.println("middleware has died... restart it before calling other methods");
 	}
+   }
 }
         
     public Vector parse(String command) {

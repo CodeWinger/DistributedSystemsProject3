@@ -1,6 +1,6 @@
-start,1
-newflight,1,1,1000,10
-newcar,1,A,1000,10
-newroom,1,A,1000,10
-newcustomerid,1,1
-commit,1
+start,3
+newflight,3,1,1000,10
+newcar,3,A,1000,10
+newroom,3,A,1000,10
+newcustomerid,3,1
+commit,3

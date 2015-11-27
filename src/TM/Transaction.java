@@ -20,6 +20,8 @@ class Transaction
 	//items queried and operated on by transaction
 	public final HashMap<String, Item> writeSet = new HashMap<String, Item>(5);
 	
+	public HashMap<Integer, Customer> customers;
+	
 	//transaction id
 	public final int tid;
 	
@@ -50,9 +52,10 @@ class Transaction
 	}
 	
 	//constructor
-	public Transaction(int txid)
+	public Transaction(int txid /*, HashMap<Integer, Customer> copyCustomers*/)
 	{
 		tid = txid;
+		//customers = copyCustomers;
 		refreshTimeStamp();
 	}
 	

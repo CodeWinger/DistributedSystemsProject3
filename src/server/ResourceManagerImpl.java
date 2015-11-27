@@ -17,6 +17,7 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.*;
+import java.util.Map.Entry;
 
 import javax.jws.WebService;
 
@@ -34,6 +35,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     
     private boolean isOnline = false;
     protected RMHashtable m_itemHT = new RMHashtable();
+    protected RMHashtable prepared_itemHT = new RMHashtable();
     protected RMHashtable tempHT = null;
     
     //resources needed to reboot server
@@ -42,6 +44,9 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     private static String masterFile = "m.txt";
     private static String shadowFile = "f2.txt";
     private static String currentFile = "f1.txt";
+    private static String copyFile = "copy.txt";
+    
+    private static TimeoutEnforcer timeoutEnforcer;
     
     //constructor to obtain the type of server (Flight, Car, Room) upon booting up to check for master node
 	 public ResourceManagerImpl()
@@ -59,6 +64,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
             masterFile = directory + masterFile;
             shadowFile = directory + shadowFile; 
             currentFile = directory + currentFile;
+            copyFile = directory + copyFile;
             
             //TODO: remove theses checks once you are done
            /* System.out.println("path is  " + System.getProperty("user.dir"));
@@ -68,7 +74,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
             System.out.println("does shadow file exist? " + new File(currentFile).exists());*/
             
             //create new file manager
-            fm = new FileManager(masterFile, shadowFile, currentFile);
+            fm = new FileManager(masterFile, shadowFile, currentFile, copyFile);
             
             //set up hashtable
             Object data = fm.readFromStableStorage();
@@ -121,18 +127,27 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     @Override
     public boolean recover(int lastCommitedTxn) {
         
-        if(lastCommitedTxn == 0) {
+        if(lastCommitedTxn == 0) 
+        {
             //initial activation, sent from middleware constructor
             isOnline = true;
-            
             return true;
         }
-            
         
-        //TODO implement recovery code
+    	System.out.println("last committed transaction (" + fm.getLastCommittedTxn() + "), passed value: " + lastCommitedTxn);
+
+        //check if last committed transaction is not the same as the recorded one in the file manager
+        if(lastCommitedTxn != fm.getLastCommittedTxn())
+        {
+        	System.out.println("last committed transaction (" + fm.getLastCommittedTxn() + ") not the same as passed value: " + lastCommitedTxn);
+        	//switch master to shadow copy
+        	fm.changeMasterToShadowCopy(lastCommitedTxn);
+        	
+        	m_itemHT = (RMHashtable) fm.readFromStableStorage(); //switch hashtables
+        }
         
+        //server has fully recovered and is available to recover
         isOnline = true;
-        
         return true;
     }
     
@@ -569,13 +584,39 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		return 0;
 	}
 	
+	private static final Object LOCK = new Object();
+	
 	@Override
 	public boolean startid(int tid) {
 	    if(!isServerOnline()) return false;
-	    //keep prior version
-        tempHT = (RMHashtable) m_itemHT.clone();
+	    
+	    //prevent 2 prepare statements from racing against each other
+  		synchronized(trxPrepared)
+  		{
+  			//transaction prepared == -1, it is open to grab
+  			if (trxPrepared == -1)
+  				trxPrepared = tid;
+  			//not the right transaction id, we return false
+  			else if (tid != trxPrepared)
+  				return false;
+  		}
+  		
+  		//create new thread to enforce timeout mechanism
+  		timeoutEnforcer = new TimeoutEnforcer(tid, this);
+  		timeoutEnforcer.start();
+	    
+	    //copy current hashtable
+  		prepared_itemHT = (RMHashtable) fm.deepCopy(m_itemHT);
+  		               
+        //swap main and prepared hastables so that cmds are made in the prepared hashtable
+        synchronized(LOCK)
+        {
+        	tempHT = m_itemHT;
+            m_itemHT = prepared_itemHT;
+        }
+      
         //reset lastCommitedTxn of file manager
-        fm.resetLastCommittedTxn(tid);
+        //fm.resetLastCommittedTxn(tid); //TODO: not sure here, if server crashes the last committed txn will be wrong?
 
 		System.out.println("Transaction initiated : " + tid);
 		return true;
@@ -630,15 +671,18 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		System.out.println("preparing transaction id  : " + transactionId ); //TODO: remove this when done
 		
 		//prevent 2 prepare statements from racing against each other
-		synchronized(trxPrepared)
-		{
-			//transaction prepared == -1, it is open to grab
-			if (trxPrepared == -1)
-				trxPrepared = transactionId;
-			//not the right transaction id, we return false
-			else if (transactionId != trxPrepared)
-				return false;
-		}
+  		synchronized(trxPrepared)
+  		{
+  			//transaction prepared == -1, it is open to grab
+  			if (trxPrepared == -1)
+  				trxPrepared = transactionId;
+  			//not the right transaction id, we return false
+  			else if (transactionId != trxPrepared)
+  				return false;
+  		}
+  		
+  		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
+  		TimeoutEnforcer.receivedPrepareCall = true;
 		
 		//write to disk the whole hash table
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
@@ -663,14 +707,15 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			
 			//reset trxPrepared
 			trxPrepared = -1;
-			
-			boolean result = fm.changeMasterToShadowCopy(transactionId);
-			System.out.println("Transaction committed : " + transactionId);
-			return result;
 		}
 		
+		//kill the timeout enforcer thread if its alive
+		if(timeoutEnforcer.isAlive())
+			timeoutEnforcer.interrupt();
 		
-		
+		boolean result = fm.changeMasterToShadowCopy(transactionId);
+		System.out.println("Transaction committed : " + transactionId);
+		return result;
 	}
 
 	@Override
@@ -684,10 +729,25 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			//reset trxPrepared
 			trxPrepared = -1;
 			//this allows another transaction to overwrite the current shadow file so no harm is done
+			
+			//reset the hashmap to what it was before
+			synchronized(LOCK)
+			{
+				m_itemHT = tempHT;
+				prepared_itemHT = null;
+			}
 		}
 		else if (trxPrepared != transactionId) //TODO: not sure, probably not needed
 		{
 			
+		}
+		
+		//if we abort not because of the enforcer, we kill the latter
+		if(!Thread.currentThread().equals(timeoutEnforcer))
+		{
+			//kill the timeout enforcer thread if its alive
+			if(timeoutEnforcer != null && timeoutEnforcer.isAlive())
+				timeoutEnforcer.interrupt();
 		}
 		
 		System.out.println("Transaction aborted : " + transactionId);
@@ -743,6 +803,10 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			
 			//reset trxPrepared
 			trxPrepared = -1;
+			
+			//kill enforecer thread
+			if ( timeoutEnforcer !=null && timeoutEnforcer.isAlive())
+				timeoutEnforcer.interrupt();
 			
 			boolean result = fm.changeMasterToShadowCopy(transactionId);
 			System.out.println("TransactionWitCrash committed : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
@@ -808,6 +872,9 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		
 		//write to disk the whole hash table
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
+		
+  		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
+  		TimeoutEnforcer.receivedPrepareCall = true;
 		
 		System.out.println("is transaction id (with crash) " + transactionId + " ready to commit: " + result + ", crash number " + crashNumber + ", RM number " + RM  ); //TODO: remove this when done
 		

@@ -39,6 +39,7 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
     private static String masterFile = "m.txt";
     private static String shadowFile = "f2.txt";
     private static String currentFile = "f1.txt";
+    private static String copyFile = "copy.txt";
 	
 	public enum Server {Flight, Car, Hotel;}
 	
@@ -93,13 +94,25 @@ public class Main implements server.ws.ResourceManager { //server.ws.ResourceMan
 		Connection hotelServer = new Connection(hotelServiceName, hotelServiceHost, hotelServicePort );
 		services.put(Server.Hotel, hotelServer);
 		
+		FileManager fm = new FileManager(directory + masterFile, directory + currentFile, directory + shadowFile, directory + copyFile);
 		//TODO: get file names
-		tm = TransactionManager.getInstance(this, new FileManager(directory + masterFile, directory + currentFile, directory + shadowFile));
+		tm = TransactionManager.getInstance(this, fm);
 	
 		//set all servers online initially
-		services.get(Server.Flight).proxy.recover(0);
-		services.get(Server.Car).proxy.recover(0);
-		services.get(Server.Hotel).proxy.recover(0);
+		//services.get(Server.Flight).proxy.recover(0);
+		//services.get(Server.Car).proxy.recover(0);
+		//services.get(Server.Hotel).proxy.recover(0);
+		
+		System.out.println("LAST COMMITTED TRANSACTION : " + fm.getLastCommittedTxn());
+		
+		for (  Server s : Server.values())
+		{
+			services.get(s).proxy.recover(0);
+			if ( fm.getLastCommittedTxn() != -1)
+				services.get(s).proxy.recover(fm.getLastCommittedTxn());
+		}
+		
+		//if (fm.getLastCommittedTxn())
 	}
 	
 	public static void main(String[] args) throws Exception 

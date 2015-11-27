@@ -45,7 +45,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	private static TransactionManager tm;
 	private static final LockManager lm = new LockManager();
 	private static Main middleware;
-	private static FileManager fm;
+	public static FileManager fm;
 	static Thread enforcer;
 	
 	//holds threads that will keep calling recover on their server (0:flight,1:car,2:hotel)
@@ -107,12 +107,19 @@ public class TransactionManager implements server.ws.ResourceManager
         if ( data != null)
         {
         	System.out.println("read from disk, recovering... ");
-        	customers = (HashMap<Integer, Customer>) data;
+        	//customers = (HashMap<Integer, Customer>) data;
         }
         else
         {
         	System.out.println("could not read from disk ... ");
         }
+       
+        //reload customers (CrashNumber == 6) //TODO: not sure if this is good check
+        if (fm.getLastCommittedTxn() != -1)
+        {
+        	customers = (HashMap<Integer, Customer>) fm.readFromStableStorage();
+        }
+        
 		return tm;
 	}
 	
@@ -133,7 +140,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	{
 		//get new trxn id
 		int randomTrnxId = Math.abs(new Random().nextInt());
-		while ( trxns.containsKey(randomTrnxId))
+		while ( trxns.containsKey(randomTrnxId) || fm.getLastCommittedTxn() == randomTrnxId)
 			randomTrnxId = Math.abs(new Random().nextInt());
 		
 		//put in hashpmap of currently executed transactions
@@ -145,11 +152,13 @@ public class TransactionManager implements server.ws.ResourceManager
 	@Override
 	public boolean startid(int tid) 
 	{
-		if (trxns.containsKey(tid))
+		if (trxns.containsKey(tid) || fm.getLastCommittedTxn() == tid)
 			  return false;
 		trxns.put(tid, new Transaction(tid));
 		return true;
 	}
+
+	private static final Object LOCK = new Object();
 	
 	@Override
 	//prepare to commit by writing to stable storage necessary data structures
@@ -175,6 +184,7 @@ public class TransactionManager implements server.ws.ResourceManager
 					return false;
 			}
 			
+
 			//write to disk the whole hash table of customers. (Don't need to serialize the 
 			// trxns hashtable since if middleware fails, all transactions will automatically abort
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
@@ -246,14 +256,14 @@ public class TransactionManager implements server.ws.ResourceManager
 				return false; //! (not) because the user asked to commit, so true to abort = false for commit
 			}
 			
-			//alert servers transaction has committed
-			alertServersCommit(t);
-			
 			//commit locally
 			fm.changeMasterToShadowCopy(transactionId);
 			
 			//reset transaction lock/object
 			trxPrepared = -1;
+			
+			//alert servers transaction has committed
+			alertServersCommit(t);
 			
 			//every operation committed to every server, we unlock all locks
 			lm.UnlockAll(t.tid);
@@ -463,11 +473,11 @@ public class TransactionManager implements server.ws.ResourceManager
 								break; 
 			case "p" + HOTEL: //nothing to do, only read operation
 							 break; //nothing to do, only read operation
-			case "+" + CUSTOMER:  Main.addCustomerToServices(id, Integer.parseInt(args[1])); 
+			case "+" + CUSTOMER:  Main.addCustomerToServices(id, Integer.parseInt(args[1])); //TODO: not sure here
 								  customers.get(Integer.parseInt(args[1])).isNew = false;
 								break;
 			case "-" + CUSTOMER: Main.removeCustomerFromServices(id, Integer.parseInt(args[1]));
-								customers.remove(Integer.parseInt(args[1]));
+								customers.remove(Integer.parseInt(args[1])); //TODO: not sure here
 								break;
 			case "q" + CUSTOMER:  //nothing to do, only read operation
 								break; 	
@@ -644,7 +654,7 @@ public class TransactionManager implements server.ws.ResourceManager
             flight = getFlight(flightNumber, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Flight +  " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Flight);
             abort(id);
             return false;
@@ -677,7 +687,7 @@ public class TransactionManager implements server.ws.ResourceManager
             flight = getFlight(flightNumber, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Flight + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Flight);
             abort(id);
             return false;
@@ -714,7 +724,7 @@ public class TransactionManager implements server.ws.ResourceManager
             flight = getFlight(flightNumber, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Flight + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Flight);
             abort(id);
             return 0;
@@ -748,7 +758,7 @@ public class TransactionManager implements server.ws.ResourceManager
             flight = getFlight(flightNumber, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Flight + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Flight);
             abort(id);
             return 0;
@@ -782,7 +792,7 @@ public class TransactionManager implements server.ws.ResourceManager
             car = getCar(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Car + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Car);
             abort(id);
             return false;
@@ -815,7 +825,7 @@ public class TransactionManager implements server.ws.ResourceManager
             car = getCar(location, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Car +" RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Car);
             abort(id);
             return false;
@@ -855,7 +865,7 @@ public class TransactionManager implements server.ws.ResourceManager
             car = getCar(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Car +" RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Car);
             abort(id);
             return 0;
@@ -892,7 +902,7 @@ public class TransactionManager implements server.ws.ResourceManager
             car = getCar(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Car +" RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Car);
             abort(id);
             return 0;
@@ -925,7 +935,7 @@ public class TransactionManager implements server.ws.ResourceManager
             room = getRoom(location, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Hotel);
             abort(id);
             return false;
@@ -960,7 +970,7 @@ public class TransactionManager implements server.ws.ResourceManager
             room = getRoom(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Hotel);
             abort(id);
             return false;
@@ -996,7 +1006,7 @@ public class TransactionManager implements server.ws.ResourceManager
             room = getRoom(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Hotel);
             abort(id);
             return 0;
@@ -1030,7 +1040,7 @@ public class TransactionManager implements server.ws.ResourceManager
             room = getRoom(location, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Hotel);
             abort(id);
             return 0;
@@ -1308,7 +1318,7 @@ public class TransactionManager implements server.ws.ResourceManager
             flight = getFlight(flightNumber, t);
         } catch (Exception e) {
             //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Flight + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Flight);
             abort(id);
             return false;
@@ -1362,7 +1372,7 @@ public class TransactionManager implements server.ws.ResourceManager
             car = getCar(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Car + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Car);
             abort(id);
             return false;
@@ -1416,7 +1426,7 @@ public class TransactionManager implements server.ws.ResourceManager
             room = getRoom(location, t);
         } catch (Exception e) {
           //Server crashed and remote method call failed
-            System.out.println("RM has crashed... aborting transaction "+id);
+            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
             notifyDeadRM(Server.Hotel);
             abort(id);
             return false;
@@ -1669,8 +1679,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			System.out.println("Normal behaviour specified for committing with transaction " + transactionId);
 			return commit(transactionId);
 		}
-			
-		
+
 		 //check if transaction exists
 		 if (!trxns.containsKey(transactionId))
 			  return false;
@@ -1737,6 +1746,12 @@ public class TransactionManager implements server.ws.ResourceManager
 				return false; //! (not) because the user asked to commit, so true to abort = false for commit
 			}
 			
+			//commit locally
+			fm.changeMasterToShadowCopy(transactionId);
+			
+			//reset transaction lock/object
+			trxPrepared = -1;
+			
 			//alert servers transaction has committed
 			alertServersCommitWithCrash(t, crashNumber, RM);
 			
@@ -1746,13 +1761,6 @@ public class TransactionManager implements server.ws.ResourceManager
 				System.out.println("crashing middleware after sending commit decision to all servers for transaction " + transactionId);
 				middleware.crash();
 			}
-				
-			
-			//commit locally
-			fm.changeMasterToShadowCopy(transactionId);
-			
-			//reset transaction lock/object
-			trxPrepared = -1;
 			
 			//every operation committed to every server, we unlock all locks
 			lm.UnlockAll(t.tid);
@@ -1838,22 +1846,24 @@ public class TransactionManager implements server.ws.ResourceManager
 											System.out.println("Calling flight server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										}
-										else Main.services.get(s).proxy.prepare(t.tid);
+										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										break;
 								case 2: if (s == Server.Car) 
 										{
 											System.out.println("Calling car server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										}
-										else Main.services.get(s).proxy.prepare(t.tid);
+										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										break;
 								case 3: if (s == Server.Hotel) 
 										{
 											System.out.println("Calling room server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										}
-										else Main.services.get(s).proxy.prepare(t.tid);
-										break;		
+										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										break;
+								default: rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										break;
 							}
 							System.out.println("server " + s.toString() + " ready to commit? " + rdy);
 							if (rdy)
@@ -1909,7 +1919,7 @@ public class TransactionManager implements server.ws.ResourceManager
 		//crash before sending any requests
 		if ( crashNumber == 2)
 		{
-			System.out.println("shutting down middleware before sending any requests for transaction " + t.tid);
+			System.out.println("crashing middleware after sending vote request and before receiving any replies " + t.tid);
 			middleware.crash();
 		}
 		
@@ -1924,8 +1934,7 @@ public class TransactionManager implements server.ws.ResourceManager
 					{
 						System.out.println("shutting down middleware after receving 1 vote response for transaction " + t.tid);
 						middleware.crash();
-					}
-						
+					}		
 				}
 			catch (Exception e){System.out.println("join didnt work");}
 		
@@ -1960,7 +1969,7 @@ public class TransactionManager implements server.ws.ResourceManager
 				if (yes[i] != null)
 					serversToAbort.add(yes[i]);*/
 			
-			//change servers in transaction that need to be notified for aborting (all servers that voted yes
+			//change servers in transaction that need to be notified for aborting (all servers that voted yes)
 			t.servers = yes;
 			
 			//not all servers are ready to commit
@@ -2025,6 +2034,8 @@ public class TransactionManager implements server.ws.ResourceManager
 	//alerts all the servers needed by the transaction that the transaction is aborting
 	private void alertServersAbortWithCrash(Transaction t, int crashNumber, int RM) 
 	{
+		
+		//System.out.println("In alertServersAbortWithCrash, t.size() " + t.servers().size() + " crash Number = " + crashNumber);
 		for( Server s : t.getServers())
 		{
 			//check if RM 
@@ -2036,22 +2047,24 @@ public class TransactionManager implements server.ws.ResourceManager
 							System.out.println("Calling flight server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abort(t.tid); 
+						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						break;
 				case 2: if (s == Server.Car) 
 						{
 							System.out.println("Calling car server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abort(t.tid); 
+						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						break;	
 				case 3: if (s == Server.Hotel) 
 						{
 							System.out.println("Calling room server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abort(t.tid); 
+						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM); 
 						break;	
+				default: Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+							break;
 			}
 			
 			//crash after sending a decision
@@ -2067,6 +2080,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	//alerts all the servers needed by the transaction that the transaction is committing
 	private void alertServersCommitWithCrash(Transaction t, int crashNumber, int RM) 
 	{
+		//System.out.println("In alertServersCommitWithCrash, t.size() " + t.servers().size() + " crash Number = " + crashNumber);
 		for( Server s : t.getServers())
 		{
 			//check if RM is involved in transaction
@@ -2078,22 +2092,24 @@ public class TransactionManager implements server.ws.ResourceManager
 							System.out.println("Calling flight server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.commit(t.tid); 
+						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM); 
 						break;
 				case 2: if (s == Server.Car) 
 						{
 							System.out.println("Calling car server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.commit(t.tid); 
+						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);  
 						break;	
 				case 3: if (s == Server.Hotel) 
 						{
 							System.out.println("Calling room server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.commit(t.tid); 
+						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);  
 						break;	
+				default : Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM); 
+						  break;
 			}
 			
 			//crash after sending a decision
@@ -2133,7 +2149,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
 			//update approach
 			fm.writeMainMemoryToShadow(customers);
-			
+		
 			//server is ready to commit
 			return true;
 		}

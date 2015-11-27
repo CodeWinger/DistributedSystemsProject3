@@ -23,26 +23,30 @@ public class FileManager
 	//sets the current Master file between f1 and f2
 	private File currentMasterFile;
 	private File shadowFile;
+	private File deepCopyFile;
 	private int lastCommittedTxn = -1;
 	
-	public int getLastCommittedTxn() {
+	public int getLastCommittedTxn() 
+	{
         return lastCommittedTxn;
     }
 
-    public void resetLastCommittedTxn(int tid) {
+    public void resetLastCommittedTxn(int tid) 
+    {
 	    //if we start another txn with tid, we reset the last commited txn
 	    if(this.lastCommittedTxn == tid)
 	        this.lastCommittedTxn = -1;
     }
 
     //constructs the new files for stable storage by checking whether or not the master record exists and setting files accordingly
-	public FileManager(String masterFile, String file1, String file2)
+	public FileManager(String masterFile, String file1, String file2, String copyFile)
 	{
 		//create new file elements
 		masterFilePointer = new File( masterFile);
 
 		File f1 = new File(file1);
 		File f2 = new File(file2);
+		deepCopyFile = new File(copyFile);
 		
 		//check if master file already exists, if so do not create from scratch the master file
 		if (masterFilePointer.exists())
@@ -56,8 +60,9 @@ public class FileManager
 				//TODO: remove print statements afterwards 
 				//get current file name for correct data
 				BufferedReader br = new BufferedReader(new FileReader(masterFile));
-				String line = br.readLine();
-				line = line.replace("\\", "/"); //replace backslashes with foward slashes
+				String filename = br.readLine();
+				filename = filename.replace("\\", "/"); //replace backslashes with foward slashes
+				lastCommittedTxn = Integer.parseInt(br.readLine());
 				/*System.out.println("file 1 : " + file1);
 				System.out.println("file2 : " + file2);
 				System.out.println("line is : " + line);
@@ -72,28 +77,28 @@ public class FileManager
 				System.out.println("file2 == line " + (file2.equals(line)));*/
 
 				//if both filenames are valid 
-				if ((file1.equals(line) /*&& f2.exists()*/))
+				if ((file1.equals(filename) /*&& f2.exists()*/))
 				{
-					System.out.println("CORRECT : file1 == line " + (file1.equals(line)));
+					System.out.println("CORRECT : file1 == line " + (file1.equals(filename)));
 					currentMasterFile = f1;
 					shadowFile = f2;
 				}
 				//if both filenames are valid
-				else if (file2.equals(line) /*&& f1.exists()*/)
+				else if (file2.equals(filename) /*&& f1.exists()*/)
 				{
-					System.out.println("CORRECT : file2 == line " + (file2.equals(line)));
+					System.out.println("CORRECT : file2 == line " + (file2.equals(filename)));
 					currentMasterFile = f2;
 					shadowFile = f1;
 				}
 				//TODO: remove this, the else ifs below should never run
-				else if( file1 != line && file2 != line)
+				else if( file1 != filename && file2 != filename)
 					System.out.println("none of the 2 files exists");
 				//debug purposes, should not ever happen since user has no control to call this code TODO : remove this
-				else if (file1 == line && !f2.exists())
+				else if (file1 == filename && !f2.exists())
 				{
 					System.out.println("WRONG FILENAME FOR THE SECOND FILE : " + file2);
 				}
-				else if (file2 == line && !f1.exists())
+				else if (file2 == filename && !f1.exists())
 				{
 					System.out.println("WRONG FILENAME FOR THE FIRST FILE : " + file1);
 				}
@@ -187,19 +192,24 @@ public class FileManager
 	{
 		PrintWriter writer;
 		
-		if(tid == lastCommittedTxn) {
+		//check if last transaction committed is the same as the request
+		/*if(tid == lastCommittedTxn) 
+		{
 		    return true;
 		}
-		else {
+		else 
+		{*/
+			//set the last committed transaction to the new transaction commitment 
 		    lastCommittedTxn = tid;
-		}
+		//}
 		
 		try {
 			//get writer object
 			writer = new PrintWriter(masterFilePointer, "UTF-8");
 			
-			//print new current master file (this is considered an atomic expression
-			writer.println(shadowFile.toString()); //TODO: write here places a path may, cause problems
+			//print new current master file (this is considered an atomic expression and last committed transaction)
+			writer.println(shadowFile.toString());
+			writer.println(tid);
 			
 			//exchange shadow and current master nodes
 			File tempFile = currentMasterFile;
@@ -210,59 +220,49 @@ public class FileManager
 			writer.close();
 			
 			return true;
-		} catch (Exception e) {	
+		} catch (Exception e) 
+		{	
 			System.out.println("could not change master node");
 			return false;
 		}
 	}
 	
-	/*private void bootup() //TODO: create files if cannot be read from xml?
+	//writes the serialized object data passed as a parameter to the function to the shadow copy
+	public Object deepCopy(Object data) //TODO : change here names and checks
 	{
-		//read from master file which file to read
-		if ( new File(masterFile).exists())
-		{
-			try (BufferedReader br = new BufferedReader(new FileReader(currentMasterFile))) {
-				
-				
-			    String line;
-			    //iterate line by line, although there should be only 1 line
-			    while ((line = br.readLine()) != null) {
-			    	
-			      //get current file
-			      currentFile = line;
-			      if ( currentFile == "f1")
-			    	  shadowFile = "f2";
-			      else
-			    	  shadowFile = "f1";
-			      break;
-			    }
-			} catch (Exception e) {
-		
-			}
-			
-			//set up hashMap
-			readFromStableStorage();
-		}
-		else //no master file, setup by hand
-		{
-			PrintWriter writer, writer2, writer3;
-			try {
-				//create all 3 files
-				writer = new PrintWriter(masterFile, "UTF-8");
-				writer2 = new PrintWriter(currentFile, "UTF-8");
-				writer3 = new PrintWriter(shadowFile, "UTF-8");
-				
-				//make master point to current file
-				writer.println(currentFile);
-			
-				writer.close();
-				writer2.close();
-				writer3.close();
-			} catch (Exception e) {	
-				System.out.println("could not change master node");
-				
-			}
-		}
-		
-	}*/ //TODO: not sure this method is needed
+		try
+        {
+			//get file and object output stream
+			FileOutputStream fos = new FileOutputStream(deepCopyFile);
+        	ObjectOutputStream oos = new ObjectOutputStream(fos);
+
+        	//write data to file
+        	oos.writeObject(data);
+        	
+            //close resources
+            oos.close();
+            fos.close();
+            
+            //get file of copy
+            FileInputStream fis = new FileInputStream(deepCopyFile);
+	        ObjectInputStream ois = new ObjectInputStream(fis);
+	         
+	         //read object
+	         data = ois.readObject();
+	         
+	         //close resources
+	         ois.close();
+	         fis.close();
+          
+           System.out.printf("deep copied object in current file " + deepCopyFile);
+           return data;
+        }
+		catch(Exception e)
+	     {
+	         System.out.println("Could not copy object ");
+	         e.printStackTrace();
+	         return null;
+	     }
+	}
+
 }
