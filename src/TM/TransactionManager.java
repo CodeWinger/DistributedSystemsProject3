@@ -60,37 +60,46 @@ public class TransactionManager implements server.ws.ResourceManager
 	private void notifyDeadRM(final Server s) {
         // TODO starts thread that keeps calling a method on a server as it recovers
 	    //to make sure he is synchronized as he restarts
-	    
+		System.out.println("trying to contact server : " + s.toString() + " to recover ...");
 	    final int lastCommittedTxn;
-	    if (fm.getLastCommittedTxn()>=0) {
+	    //if (fm.getLastCommittedTxn()>=0) {
 	        lastCommittedTxn = fm.getLastCommittedTxn();
-        } else {
-            //no committed txns yet
+       /*} else {
+            //no committed txns yet /?TODO not sure, how to contact RM?
             return;
-        }
-        
-	    if (!recoveryThreads[s.ordinal()].isAlive()) {
-	        recoveryThreads[s.ordinal()] = new Thread(new Runnable() {
+        }*/
+	    if ( recoveryThreads[s.ordinal()] == null || (recoveryThreads[s.ordinal()] != null && !recoveryThreads[s.ordinal()].isAlive())) 
+	    {
+	        recoveryThreads[s.ordinal()] = new Thread(new Runnable() 
+	        {
                 @Override
                 public void run() {
                     boolean isOnline = false;
                     //call appropriate method on RM continuously
-                    while (!isOnline) {
-                        try {
+                    while (!isOnline) 
+                    {
+                    	try 
+                        {
                             Thread.sleep(500);
+                            
                             //call waking up RM to synch it with last commited txn
-                            Main.services.get(s).proxy.recover(lastCommittedTxn);
-                            isOnline = true;
-                        } catch (Exception e) {
-                            continue;
+                            isOnline = Main.services.get(s).proxy.recover(lastCommittedTxn);
+                            
+                            
+                            
                         }
-
+                        catch (Exception e) 
+                        {
+                           System.out.println("Server  " + s + "  is still not up... ");
+                           isOnline = false;
+                        }
                     }
+                    
+                    recoveryThreads[s.ordinal()] = null; //thread dies, remove from array
                 }
             });
 	        recoveryThreads[s.ordinal()].start();
-        }
-        
+        } 
     }
 	
 	//returns instance of the transaction manager
@@ -1844,23 +1853,49 @@ public class TransactionManager implements server.ws.ResourceManager
 								case 1: if (s == Server.Flight)
 										{
 											System.out.println("Calling flight server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											try 
+											{
+												rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											} catch (Exception e) 
+											{
+												System.out.println("flight server crashed without response for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+												//TODO: add more code here if needed
+									            notifyDeadRM(Server.Flight);
+									            //abort(id);
+									           
+											}
 										}
-										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										else rdy = Main.services.get(s).proxy.prepare(t.tid);
 										break;
 								case 2: if (s == Server.Car) 
 										{
 											System.out.println("Calling car server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											try 
+											{
+												rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											} catch (Exception e) 
+											{
+												System.out.println("car server crashed without response for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+												//TODO: add more code here if needed
+												 notifyDeadRM(Server.Car);
+											}										
 										}
-										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										else rdy = Main.services.get(s).proxy.prepare(t.tid);
 										break;
 								case 3: if (s == Server.Hotel) 
 										{
 											System.out.println("Calling room server with prepareWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-											rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											try 
+											{
+												rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+											} catch (Exception e) 
+											{
+												System.out.println("room server crashed without response for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+												//TODO: add more code here if needed
+												 notifyDeadRM(Server.Hotel);
+											}									
 										}
-										else rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
+										else rdy = Main.services.get(s).proxy.prepare(t.tid);
 										break;
 								default: rdy = Main.services.get(s).proxy.prepareWithCrash(t.tid, crashNumber, RM);
 										break;
@@ -1879,9 +1914,7 @@ public class TransactionManager implements server.ws.ResourceManager
 							System.out.println("Calling abort of transaction " + t.tid + "  on the server : " + s.toString());
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						
-					}
-					
+					}	
 				});
 			
 			//run the thread
@@ -2034,7 +2067,6 @@ public class TransactionManager implements server.ws.ResourceManager
 	//alerts all the servers needed by the transaction that the transaction is aborting
 	private void alertServersAbortWithCrash(Transaction t, int crashNumber, int RM) 
 	{
-		
 		//System.out.println("In alertServersAbortWithCrash, t.size() " + t.servers().size() + " crash Number = " + crashNumber);
 		for( Server s : t.getServers())
 		{
@@ -2047,21 +2079,21 @@ public class TransactionManager implements server.ws.ResourceManager
 							System.out.println("Calling flight server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						else Main.services.get(s).proxy.abort(t.tid);
 						break;
 				case 2: if (s == Server.Car) 
 						{
 							System.out.println("Calling car server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
+						else Main.services.get(s).proxy.abort(t.tid);
 						break;	
 				case 3: if (s == Server.Hotel) 
 						{
 							System.out.println("Calling room server with abortWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
 							Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 						}
-						else Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM); 
+						else Main.services.get(s).proxy.abort(t.tid);
 						break;	
 				default: Main.services.get(s).proxy.abortWithCrash(t.tid, crashNumber, RM);
 							break;
@@ -2080,6 +2112,9 @@ public class TransactionManager implements server.ws.ResourceManager
 	//alerts all the servers needed by the transaction that the transaction is committing
 	private void alertServersCommitWithCrash(Transaction t, int crashNumber, int RM) 
 	{
+		
+		//TODO: rewrite this as RM = s.ordinal() + 1 
+		
 		//System.out.println("In alertServersCommitWithCrash, t.size() " + t.servers().size() + " crash Number = " + crashNumber);
 		for( Server s : t.getServers())
 		{
@@ -2087,27 +2122,57 @@ public class TransactionManager implements server.ws.ResourceManager
 			switch (RM)
 			{
 				//check if RM number is the same as one of the servers, if so call commitWithCrash on that server
-				case 1: if (s == Server.Flight) 
+				case 1: try 
 						{
-							System.out.println("Calling flight server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+								if (s == Server.Flight) 
+								{
+									System.out.println("Calling " + s.toString() + " server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+									
+									Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+								}
+								else 
+									Main.services.get(s).proxy.commit(t.tid);
+							} 
+						catch (Exception e) 
+						{
+							System.out.println(s.toString() + " server crashed while sending commit for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							notifyDeadRM(s);
 						}
-						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM); 
 						break;
-				case 2: if (s == Server.Car) 
+				case 2: try 
+							{
+								if (s == Server.Car) 
+								{
+									System.out.println("Calling " + s.toString() + " server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+									
+									Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+								}
+								else 
+									Main.services.get(s).proxy.commit(t.tid);
+							} 
+						catch (Exception e) 
 						{
-							System.out.println("Calling car server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+							System.out.println(s.toString() + " server crashed while sending commit for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							notifyDeadRM(s);
 						}
-						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);  
-						break;	
-				case 3: if (s == Server.Hotel) 
+						break;
+				case 3: try 
+							{
+								if (s == Server.Hotel) 
+								{
+									System.out.println("Calling " + s.toString() + " server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+									
+									Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+								}
+								else 
+									Main.services.get(s).proxy.commit(t.tid);
+							} 
+						catch (Exception e) 
 						{
-							System.out.println("Calling room server with commitWithCrash for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
-							Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);
+							System.out.println(s.toString() + " server crashed while sending commit for transaction " + t.tid + ", crash number" + crashNumber + ", RM " + RM);
+							notifyDeadRM(s);
 						}
-						else Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM);  
-						break;	
+						break;
 				default : Main.services.get(s).proxy.commitWithCrash(t.tid, crashNumber, RM); 
 						  break;
 			}

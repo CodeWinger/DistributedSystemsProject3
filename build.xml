@@ -223,7 +223,7 @@
 
     </target>
 	
-	<target name="build-middleRM" depends="generate-middleRM">
+	<target name="build-middleRM">
 		<javac
 		        fork="true"
 		        srcdir="${basedir}/src"

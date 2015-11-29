@@ -775,6 +775,9 @@ public class Client extends WSClient {
 			    	int crashNo = Integer.parseInt((String) arguments.get(1));
 			    	int RMNo = 0;
             	
+			    	if ( 8 <= crashNo && crashNo <= 12  ) // RM crash
+			    		RMNo = Integer.parseInt((String) arguments.get(2));
+			    	
             		String reason = "";
                 	switch(crashNo)
                 	{
@@ -798,8 +801,6 @@ public class Client extends WSClient {
                 	
                 	if ( 8 <= crashNo && crashNo <= 12  ) // RM crash
                 	{
-                		RMNo = Integer.parseInt((String) arguments.get(2));
-                		
                 		/*reserveItinerary(int id, int customerId, Vector flightNumbers,
                                     String location, boolean car, boolean room)*/
                 		Vector flightNum = new Vector();

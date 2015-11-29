@@ -830,13 +830,28 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 			//reset trxPrepared
 			trxPrepared = -1;
 			//this allows another transaction to overwrite the current shadow file so no harm is done
+			
+			//reset the hashmap to what it was before
+			synchronized(LOCK)
+			{
+				m_itemHT = tempHT;
+				prepared_itemHT = null;
+			}
 		}
 		else if (trxPrepared != transactionId) //TODO: not sure, probably not needed
 		{
 			
 		}
 		
-		System.out.println("TransactionWithCrash aborted : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
+		//if we abort not because of the enforcer, we kill the latter
+		if(!Thread.currentThread().equals(timeoutEnforcer))
+		{
+			//kill the timeout enforcer thread if its alive
+			if(timeoutEnforcer != null && timeoutEnforcer.isAlive())
+				timeoutEnforcer.interrupt();
+		}
+		
+		System.out.println("Transaction (with crash) aborted : " + transactionId + ", crash number " + crashNumber + ", RM number " + RM);
 		return true;
 	}
 
@@ -856,6 +871,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		if ( crashNumber == 9)
 		{
 			System.out.println("Forcing abort for transaction " + transactionId);
+			abortWithCrash(transactionId, crashNumber, RM);
 			return false;
 		}
 
@@ -881,7 +897,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		//crash after sending response
 		if (crashNumber == 10)
 		{
-			System.out.println("Crashing after sending answer rdy (" + result + ") for transction " + transactionId);
+			System.out.println("Crashing after sending answer (" + result + ") for transction " + transactionId);
 			
 			//dispatch new thread to force this RM to crash after sending its answer back
 			new Thread(new Runnable()
@@ -891,13 +907,13 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 				{
 					try 
 					{
-						//sleep 3 seconds
-						Thread.sleep(3000);
+						//sleep 0.5 seconds
+						//Thread.sleep(10);
 						
 						//force shutdown of RM
 						shutdown();
 					} 
-					catch (InterruptedException e) 
+					catch (Exception e) 
 					{
 					}
 				}
