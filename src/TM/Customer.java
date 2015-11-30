@@ -6,6 +6,8 @@ import java.util.LinkedList;
 
 class Customer implements Serializable
 {
+	private static final long serialVersionUID = -2562289447576073230L;
+
 	//customer id
 	public final int id;
 	
@@ -16,26 +18,14 @@ class Customer implements Serializable
 	//list of reservations made by customer
 	 final HashMap<String, Item> reservations = new HashMap<String, Item>();
 	
-	//public final LinkedList<Transaction> exclusiveAccess = new LinkedList<Transaction>();
-	
-	public Customer(int pid /*, Transaction t*/)
+	public Customer(int pid)
 	{
 		id = pid;
-		//exclusiveAccess.add(t);
 	}
-	
-	/*public Item[] getReservations()
-	{
-		Item[] items = new Item[reservations.size()];
-		reservations.
-		return items;
-	}*/
 	
 	public void addReservation(String key, Item i)
 	{
 		if (!reservations.containsKey(key))
 			reservations.put(key, i);
 	}
-	
-	
 }

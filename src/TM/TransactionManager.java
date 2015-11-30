@@ -56,6 +56,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	
 	//hashmap of current customers
 	static HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
+	static HashMap<Integer, Customer> temp = new HashMap<Integer, Customer>();
 	
 	private void notifyDeadRM(final Server s) 
 	{
@@ -199,7 +200,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			// trxns hashtable since if middleware fails, all transactions will automatically abort
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
 			//update approach
-			fm.writeMainMemoryToShadow(t.customers); //TODO: customerRefactor
+			fm.writeMainMemoryToShadow(temp); //TODO: customerRefactor
 			
 			//server is ready to commit
 			return true;
@@ -242,6 +243,9 @@ public class TransactionManager implements server.ws.ResourceManager
 			//alert servers that transaction is beginning
 			alertServersStart(t);
 			
+			//set temp to current hashmap of customers
+			temp = (HashMap<Integer, Customer>) fm.deepCopy(customers);
+			
 			//if we get all locks, we may start to execute the commands
 			for ( String cmd : t.cmds())
 			{
@@ -269,11 +273,15 @@ public class TransactionManager implements server.ws.ResourceManager
 			//commit locally
 			fm.changeMasterToShadowCopy(transactionId);
 			
-			synchronized (LOCK)
+			//change reference of customers
+			customers = temp;
+			temp = null;
+			
+			/*synchronized (LOCK)
 			{
 				//change customers hashtable with the transaction version
 				customers = t.customers;
-			}
+			}*/
 			
 			//reset transaction lock/object
 			trxPrepared = -1;
@@ -490,10 +498,16 @@ public class TransactionManager implements server.ws.ResourceManager
 			case "p" + HOTEL: //nothing to do, only read operation
 							 break; //nothing to do, only read operation
 			case "+" + CUSTOMER:  Main.addCustomerToServices(t.tid, Integer.parseInt(args[1])); //TODO: not sure here
-								  t.customers.get(Integer.parseInt(args[1])).isNew = false;
+								 
+								  //add customer to global data structure
+								  Customer added = t.customers.get(t.tid);
+								  added.isNew = false;
+								  added.isDeleted = false;
+								  temp.put(t.tid, added);
 								break;
-			case "-" + CUSTOMER: Main.removeCustomerFromServices(t.tid, Integer.parseInt(args[1]));
-								//t.customers.remove(Integer.parseInt(args[1])); //TODO: not sure here
+			case "-" + CUSTOMER: //remove customers from RM's and middleware 
+								Main.removeCustomerFromServices(t.tid, Integer.parseInt(args[1]));
+								 temp.remove(Integer.parseInt(args[1]));
 								break;
 			case "q" + CUSTOMER:  //nothing to do, only read operation
 								break; 	
@@ -1087,7 +1101,8 @@ public class TransactionManager implements server.ws.ResourceManager
 		  try 
 		  {
             room = getRoom(location, t);
-          } catch (Exception e) 
+          } 
+		  catch (Exception e) 
 		  {
 	            //Server crashed and remote method call failed
 	            System.out.println(Server.Hotel + " RM has crashed... aborting transaction "+id);
@@ -2065,8 +2080,8 @@ public class TransactionManager implements server.ws.ResourceManager
 		}
 		 
 		//clean up resources
-		for ( String cmd : t.cmds())
-			cleanup(cmd);
+		//for ( String cmd : t.cmds())
+		//cleanup(cmd);
 		
 		 //unlock all resources held by transaction, if any
 		 lm.UnlockAll(transactionId);
@@ -2189,7 +2204,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			// trxns hashtable since if middleware fails, all transactions will automatically abort
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
 			//update approach
-			fm.writeMainMemoryToShadow(t.customers);
+			fm.writeMainMemoryToShadow(temp);
 		
 			//server is ready to commit
 			return true;

@@ -5,6 +5,8 @@ import java.util.HashMap;
 
 class Item implements Serializable
 {
+	private static final long serialVersionUID = 7361250011815963147L;
+	
 	int count;
     int price;
     boolean isDeleted = false;

@@ -34,7 +34,7 @@ FIXED = query {flight,car,room,customerinfo} should be 1000 and no bill  for cas
 		a decision from coordinator are allowed to wait by assumption 2) No votes from RM automatically
 		abort and have to handle rollbacks (same problem as cases 1,2,3,4 above)
 
-		FIXED (required lots of time to fix, needs thorough testing and major refactoring later on ) (RETEST 1,2,3,4,5)
+		FIXED
 		
 	7 Crash after having sent all decisions
 		changes are persistent on all machines (if we include middleware and if it is allowed), integrity is maintained
@@ -113,3 +113,4 @@ Ask Yousuf:
 
 	Things to do:
 	-make sure normal commit and commit with crash (and similar methods have same implementation)
+	-retest everything
