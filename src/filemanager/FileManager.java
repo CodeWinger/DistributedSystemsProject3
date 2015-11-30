@@ -254,13 +254,11 @@ public class FileManager
 	         ois.close();
 	         fis.close();
           
-           System.out.printf("deep copied object in current file " + deepCopyFile);
-           return data;
+	         return data;
         }
 		catch(Exception e)
 	     {
-	         System.out.println("Could not copy object ");
-	         e.printStackTrace();
+	         System.out.println("Could not deep copy object ");
 	         return null;
 	     }
 	}

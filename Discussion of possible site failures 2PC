@@ -114,3 +114,4 @@ Ask Yousuf:
 	Things to do:
 	-make sure normal commit and commit with crash (and similar methods have same implementation)
 	-retest everything
+	-yes vote from RM and crashed TM should not abort transaction, RM should wait indefinitely

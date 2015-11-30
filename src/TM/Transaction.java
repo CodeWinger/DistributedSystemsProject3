@@ -3,6 +3,7 @@ package TM;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.Stack;
 
 import middleRM.ws.Main;
@@ -107,6 +108,10 @@ class Transaction
 		
 		for(Server s : servers )
 			result += s + " ";
+		
+		result += "\n\t\thaving the following customer set : \n";
+		for ( Entry<Integer, Customer> c : customers.entrySet())
+			result += "\t\t(" + c.getKey().intValue() +")\n";
 		result += "\n\n";
 		return result;
 	}

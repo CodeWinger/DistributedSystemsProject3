@@ -35,7 +35,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	//various immutable global variables
 	public static final int READ = 0;
 	public static final int WRITE = 1;
-	public static final long TTL = 20000; //time to live for transactions : 20 seconds
+	public static final long TTL = 200000; //time to live for transactions : 20 seconds
 	private static final long TIMEOUT = 5000; //5 seconds before time out while calling prepare on the servers (TODO change this)
 	
 	//only 1 transaction may be in the prepared state (-1 => up for grabs)
@@ -195,7 +195,6 @@ public class TransactionManager implements server.ws.ResourceManager
 					return false;
 			}
 			
-
 			//write to disk the whole hash table of customers. (Don't need to serialize the 
 			// trxns hashtable since if middleware fails, all transactions will automatically abort
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
@@ -274,8 +273,11 @@ public class TransactionManager implements server.ws.ResourceManager
 			fm.changeMasterToShadowCopy(transactionId);
 			
 			//change reference of customers
-			customers = temp;
-			temp = null;
+			synchronized(LOCK)
+			{
+				customers = temp;
+				temp = null;
+			}
 			
 			/*synchronized (LOCK)
 			{
@@ -351,8 +353,18 @@ public class TransactionManager implements server.ws.ResourceManager
 					{
 						try
 						{
-							boolean rdy = Main.services.get(s).proxy.prepare(t.tid);
-							System.out.println("server " + s.toString() + " ready to commit? " + rdy);
+							boolean rdy = false;
+							try
+							{
+								//call prepare on a given server
+								rdy = Main.services.get(s).proxy.prepare(t.tid);
+								System.out.println("server " + s.toString() + " ready to commit? " + rdy);
+							}
+							catch(Exception e)
+							{
+								System.out.println( s.toString() + " server crashed without response for transaction " + t.tid);
+					            notifyDeadRM(s);
+							}
 							if (rdy)
 								synchronized(yes)
 								{
@@ -455,14 +467,35 @@ public class TransactionManager implements server.ws.ResourceManager
 	private void alertServersCommit(Transaction t) 
 	{
 		for( Server s : t.getServers())
-			Main.services.get(s).proxy.commit(t.tid);
+		{
+			try
+			{
+				Main.services.get(s).proxy.commit(t.tid);
+			}
+			catch(Exception e)
+			{
+				System.out.println(s.toString() + " server crashed while sending commit for transaction " + t.tid);
+				notifyDeadRM(s);
+			}
+		}
 	}
 	
 	//alerts all the servers needed by the transaction that the transaction is aborting
 	private void alertServersAbort(Transaction t) 
 	{
 		for( Server s : t.getServers())
-			Main.services.get(s).proxy.abort(t.tid);
+		{
+			try
+			{
+				Main.services.get(s).proxy.abort(t.tid);
+			}
+			catch(Exception e)
+			{
+				System.out.println(s.toString() + " server crashed while sending abort for transaction " + t.tid);
+				notifyDeadRM(s);
+			}
+		}
+			
 	}
 	
 	//executes the command and returns the values obtained to the user
@@ -499,11 +532,11 @@ public class TransactionManager implements server.ws.ResourceManager
 							 break; //nothing to do, only read operation
 			case "+" + CUSTOMER:  Main.addCustomerToServices(t.tid, Integer.parseInt(args[1])); //TODO: not sure here
 								 
-								  //add customer to global data structure
-								  Customer added = t.customers.get(t.tid);
+								  //add customer to global temporary data structure
+								  Customer added = t.customers.get(Integer.parseInt(args[1]));
 								  added.isNew = false;
 								  added.isDeleted = false;
-								  temp.put(t.tid, added);
+								  temp.put(Integer.parseInt(args[1]), added);
 								break;
 			case "-" + CUSTOMER: //remove customers from RM's and middleware 
 								Main.removeCustomerFromServices(t.tid, Integer.parseInt(args[1]));
@@ -518,8 +551,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			case "r" + HOTEL:   Main.services.get(Server.Hotel).proxy.reserveRoom(t.tid, Integer.parseInt(args[1]), args[2]);
 					   			break;
 			default: break; //reserve itinerary is a composite of the above actions, no need to actually make a cmd of it
-		}
-		
+		}		
 	}
 
 	//requests the lock of a cmd throws a deadlock exception if we can't acquire the lock
@@ -1400,7 +1432,7 @@ public class TransactionManager implements server.ws.ResourceManager
           }
 		  
 		  //get customer
-		  Customer c = customers.get(customerId);
+		  Customer c = t.customers.get(customerId);
 		  
 		  //can't add reservation if no seats or flight is deleted
 		  if ( flight.isDeleted ||  flight.count == 0)
@@ -1458,7 +1490,7 @@ public class TransactionManager implements server.ws.ResourceManager
           }
 		  
 		  //get customer
-		  Customer c = customers.get(customerId);
+		  Customer c = t.customers.get(customerId);
 		  
 		  //can't add reservation if no cars or car is deleted
 		  if ( car.isDeleted ||  car.count == 0)
@@ -1516,7 +1548,7 @@ public class TransactionManager implements server.ws.ResourceManager
          }
 		  
 		  //get customer
-		  Customer c = customers.get(customerId);
+		  Customer c = t.customers.get(customerId);
 		  
 		  //can't add reservation if no rooms or room is deleted
 		  if ( room.isDeleted || room.count == 0)
@@ -1754,8 +1786,8 @@ public class TransactionManager implements server.ws.ResourceManager
 		11 Crash after receiving decision but before committing/aborting
 		12 Recovery of RM TODO: implement this*/
 	@Override
-	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) {
-		
+	public boolean commitWithCrash(int transactionId, int crashNumber, int RM) 
+	{
 		//no crashes, run commit protocol normally
 		if (crashNumber == 0)
 		{
@@ -1770,6 +1802,10 @@ public class TransactionManager implements server.ws.ResourceManager
 		//get transaction
 		Transaction t = trxns.get(transactionId);
 		t.refreshTimeStamp(); //refresh time stamp so that TTLenforcer won't remove transaction
+		
+		System.out.println("number of servers involved : " + t.getServers().length); //TODO remove this
+		System.out.println("transaction  : " + t.toString()); //TODO remove this
+
 		
 		//synchronize t to set isTerminating to true
 		synchronized(t)
@@ -1788,6 +1824,9 @@ public class TransactionManager implements server.ws.ResourceManager
 			
 			//alert servers that transaction is beginning
 			alertServersStart(t);
+			
+			//set temp to current hashmap of customers
+			temp = (HashMap<Integer, Customer>) fm.deepCopy(customers);
 			
 			//if we get all locks, we may start to execute the commands
 			for ( String cmd : t.cmds())
@@ -1813,7 +1852,6 @@ public class TransactionManager implements server.ws.ResourceManager
 				middleware.shutdown();
 			}
 				
-			
 			//if not ready
 			if (!ready)
 			{
@@ -1831,11 +1869,18 @@ public class TransactionManager implements server.ws.ResourceManager
 			//commit locally
 			fm.changeMasterToShadowCopy(transactionId);
 			
-			synchronized (LOCK)
+			synchronized(LOCK)
+			{
+				//change reference of customers
+				customers = temp;
+				temp = null;
+			}
+			
+			/*synchronized (LOCK)
 			{
 				//change customers hashtable with the transaction version
-				customers = t.customers;
-			}
+				customers = temp;
+			}*/
 
 			//reset transaction lock/object
 			trxPrepared = -1;
@@ -2082,6 +2127,11 @@ public class TransactionManager implements server.ws.ResourceManager
 		//clean up resources
 		//for ( String cmd : t.cmds())
 		//cleanup(cmd);
+		
+		/*synchronized(LOCK)
+		{
+			customers = 
+		}*/
 		
 		 //unlock all resources held by transaction, if any
 		 lm.UnlockAll(transactionId);
