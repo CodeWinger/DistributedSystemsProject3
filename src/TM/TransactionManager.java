@@ -58,7 +58,7 @@ public class TransactionManager implements server.ws.ResourceManager
 	static HashMap<Integer, Customer> customers = new HashMap<Integer, Customer>(1000);
 	static HashMap<Integer, Customer> temp = new HashMap<Integer, Customer>();
 	
-	private void notifyDeadRM(final Server s) 
+	private void notifyDeadRM(final Server s) 	
 	{
         // TODO starts thread that keeps calling a method on a server as it recovers
 	    //to make sure he is synchronized as he restarts
@@ -302,6 +302,13 @@ public class TransactionManager implements server.ws.ResourceManager
 			//we abort the transaction
 			//e.printStackTrace();
 			System.out.println("Deadlock: Transaction " + t.tid + " will abort.");
+			
+			synchronized(t)
+			{
+				//set is terminating false, the abort call will need this field
+				t.isTerminating = false;
+			}
+			
 			abort(transactionId);
 			return false;
 		}
@@ -1666,7 +1673,7 @@ public class TransactionManager implements server.ws.ResourceManager
 			t.writeSet.put(key, flight);
 		}
 		
-		return t.writeSet.get(key);
+		return t.writeSet.get(key); 
 	}
 	
 	//gets the image of a database car item for a transaction and updates the write set of the latter
@@ -1906,6 +1913,13 @@ public class TransactionManager implements server.ws.ResourceManager
 			//we abort the transaction
 			//e.printStackTrace();
 			System.out.println("Deadlock: Transaction " + t.tid + " will abort.");
+			
+			synchronized(t)
+			{
+				//set is terminating false, the abort call will need this field
+				t.isTerminating = false;
+			}
+			
 			abortWithCrash(transactionId, crashNumber, RM);
 			return false;
 		}
