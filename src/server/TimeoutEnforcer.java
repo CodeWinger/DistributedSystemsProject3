@@ -20,7 +20,7 @@ public class TimeoutEnforcer extends Thread
 		try
 		{
 			Thread.sleep(TIMEOUT);
-			
+			System.out.println("Thread timeout enforcer, has transaction voted yes : " + votedYes);
 			if(votedYes)
 				return;
 			

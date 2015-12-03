@@ -286,8 +286,11 @@ public class TransactionManager implements server.ws.ResourceManager
 				customers = t.customers;
 			}*/
 			
-			//reset transaction lock/object
-			trxPrepared = -1;
+			synchronized(trxPrepared)
+			{
+				//reset transaction lock/object
+				trxPrepared = -1;
+			}
 			
 			//alert servers transaction has committed
 			alertServersCommit(t);

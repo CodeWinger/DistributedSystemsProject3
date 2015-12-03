@@ -142,8 +142,9 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
         	//voted yes but  middleware crashed
     		if ( trxPrepared == lastCommitedTxn)
         	{
-    			
+    			System.out.println("trx prepared value : " + trxPrepared + ", lastcommitedTxn " + lastCommitedTxn);
         		commit(lastCommitedTxn);
+        	
         	}
     		else //recovering RM
     		{
