@@ -137,11 +137,12 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
     	System.out.println("last committed transaction (" + fm.getLastCommittedTxn() + "), passed value: " + lastCommitedTxn);
 
         //check if last committed transaction is not the same as the recorded one in the file manager
-        if(lastCommitedTxn != fm.getLastCommittedTxn())
+        if(lastCommitedTxn != fm.getLastCommittedTxn() && lastCommitedTxn != -1)
         {
         	//voted yes but  middleware crashed
     		if ( trxPrepared == lastCommitedTxn)
         	{
+    			
         		commit(lastCommitedTxn);
         	}
     		else //recovering RM

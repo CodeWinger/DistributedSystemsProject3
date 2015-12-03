@@ -184,17 +184,6 @@ public class TransactionManager implements server.ws.ResourceManager
 		{
 			//TODO: test this method with commit but abort afterwards
 			
-			//prevent 2 prepare statements from racing against each other
-			synchronized(trxPrepared)
-			{
-				//transaction prepared == -1, it is open to grab
-				if (trxPrepared == -1)
-					trxPrepared = t.tid;
-				//not the right transaction id, middle ware can't commit
-				else if (t.tid != trxPrepared)
-					return false;
-			}
-			
 			//write to disk the whole hash table of customers. (Don't need to serialize the 
 			// trxns hashtable since if middleware fails, all transactions will automatically abort
 			// and upon reboot, the lock table is cleared and the servers aren't dirty because we use a deferred 
@@ -230,6 +219,17 @@ public class TransactionManager implements server.ws.ResourceManager
 			if ( t.isTerminating) //to prevent double aborts of a transaction
 				return true;
 			t.isTerminating= true;
+		}
+		
+		//prevent 2 prepare statements from racing against each other
+		synchronized(trxPrepared)
+		{
+			//transaction prepared == -1, it is open to grab
+			if (trxPrepared == -1)
+				trxPrepared = t.tid;
+			//not the right transaction id, middle ware can't commit
+			else if (t.tid != trxPrepared)
+				return false;
 		}
 		
 		//in case of a deadlock call
