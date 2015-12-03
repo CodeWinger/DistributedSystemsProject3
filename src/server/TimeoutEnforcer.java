@@ -3,9 +3,9 @@ package server;
 public class TimeoutEnforcer extends Thread
 {
 	private static final int TIMEOUT = 5000;
-	private static int transactionID;
-	private static boolean votedYes = false;
-	private static ResourceManagerImpl resourceManager;
+	private int transactionID;
+	private boolean votedYes = false;
+	private ResourceManagerImpl resourceManager;
 	
 	public TimeoutEnforcer(int tid, ResourceManagerImpl rm)
 	{
