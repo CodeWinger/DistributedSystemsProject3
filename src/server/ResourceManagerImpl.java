@@ -695,7 +695,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
 		
 		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
-  		TimeoutEnforcer.votedYes = result;
+  		timeoutEnforcer.setVotedYes(result);
 		
 		System.out.println("is transaction id " + transactionId + " ready to commit: " + result ); //TODO: remove this when done
 		
@@ -900,7 +900,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
 		
   		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
-  		TimeoutEnforcer.votedYes = result;
+  		timeoutEnforcer.setVotedYes(result);
 		
 		System.out.println("is transaction id (with crash) " + transactionId + " ready to commit: " + result + ", crash number " + crashNumber + ", RM number " + RM  ); //TODO: remove this when done
 		

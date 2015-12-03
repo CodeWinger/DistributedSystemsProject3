@@ -4,15 +4,21 @@ public class TimeoutEnforcer extends Thread
 {
 	private static final int TIMEOUT = 5000;
 	private static int transactionID;
-	public static boolean votedYes = false;
+	private static boolean votedYes = false;
 	private static ResourceManagerImpl resourceManager;
 	
 	public TimeoutEnforcer(int tid, ResourceManagerImpl rm)
 	{
 		transactionID = tid;
 		resourceManager = rm;
+		votedYes = false;
 	}
 	
+	public void setVotedYes(boolean yes)
+	{
+		votedYes = yes;
+		//System.out.println("voted yes changed in tiemout enforcer");
+	}
 	
 	@Override 
 	public void run()
