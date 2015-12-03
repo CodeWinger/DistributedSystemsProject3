@@ -255,6 +255,10 @@ public class TransactionManager implements server.ws.ResourceManager
 			//check if servers are ready to commit
 			boolean ready = areServersReadyToCommit(t);
 			
+			if (ready)
+				//commit locally (decision)
+				fm.changeMasterToShadowCopy(transactionId);
+			
 			//if not ready
 			if (!ready)
 			{
@@ -268,9 +272,6 @@ public class TransactionManager implements server.ws.ResourceManager
 				abort(t.tid);
 				return false; //! (not) because the user asked to commit, so true to abort = false for commit
 			}
-			
-			//commit locally
-			fm.changeMasterToShadowCopy(transactionId);
 			
 			//change reference of customers
 			synchronized(LOCK)
@@ -1855,6 +1856,10 @@ public class TransactionManager implements server.ws.ResourceManager
 			//check if servers are ready to commit
 			boolean ready = areServersReadyToCommitWithCrash(t, crashNumber, RM);
 			
+			if (ready)
+				//commit locally (decision)
+				fm.changeMasterToShadowCopy(transactionId);
+
 			//have decided, but before sending reply
 			if(crashNumber == 5)
 			{
@@ -1875,9 +1880,6 @@ public class TransactionManager implements server.ws.ResourceManager
 				abortWithCrash(t.tid, crashNumber, RM);
 				return false; //! (not) because the user asked to commit, so true to abort = false for commit
 			}
-			
-			//commit locally
-			fm.changeMasterToShadowCopy(transactionId);
 			
 			synchronized(LOCK)
 			{
