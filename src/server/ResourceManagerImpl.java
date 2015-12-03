@@ -139,11 +139,19 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
         //check if last committed transaction is not the same as the recorded one in the file manager
         if(lastCommitedTxn != fm.getLastCommittedTxn())
         {
-        	System.out.println("last committed transaction (" + fm.getLastCommittedTxn() + ") not the same as passed value: " + lastCommitedTxn);
-        	//switch master to shadow copy
-        	fm.changeMasterToShadowCopy(lastCommitedTxn);
-        	
-        	m_itemHT = (RMHashtable) fm.readFromStableStorage(); //switch hashtables
+        	//voted yes but  middleware crashed
+    		if ( trxPrepared == lastCommitedTxn)
+        	{
+        		commit(lastCommitedTxn);
+        	}
+    		else //recovering RM
+    		{
+    			System.out.println("last committed transaction (" + fm.getLastCommittedTxn() + ") not the same as passed value: " + lastCommitedTxn);
+            	//switch master to shadow copy
+            	fm.changeMasterToShadowCopy(lastCommitedTxn);
+            	
+            	m_itemHT = (RMHashtable) fm.readFromStableStorage(); //switch hashtables
+    		}
         }
         
         //server has fully recovered and is available to recover
@@ -680,12 +688,12 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
   			else if (transactionId != trxPrepared)
   				return false;
   		}
-  		
-  		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
-  		TimeoutEnforcer.receivedPrepareCall = true;
 		
 		//write to disk the whole hash table
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
+		
+		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
+  		TimeoutEnforcer.votedYes = result;
 		
 		System.out.println("is transaction id " + transactionId + " ready to commit: " + result ); //TODO: remove this when done
 		
@@ -890,7 +898,7 @@ public class ResourceManagerImpl implements server.ws.ResourceManager {
 		boolean result = fm.writeMainMemoryToShadow(m_itemHT);
 		
   		//tell the timeout enforcer that we have received the prepare call, so he will sleep another timeout interval
-  		TimeoutEnforcer.receivedPrepareCall = true;
+  		TimeoutEnforcer.votedYes = result;
 		
 		System.out.println("is transaction id (with crash) " + transactionId + " ready to commit: " + result + ", crash number " + crashNumber + ", RM number " + RM  ); //TODO: remove this when done
 		

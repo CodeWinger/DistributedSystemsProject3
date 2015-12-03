@@ -2,3 +2,7 @@ build/
 bin/
 webapps/
 *.class
+server/car
+server/flight
+server/room
+server/middle

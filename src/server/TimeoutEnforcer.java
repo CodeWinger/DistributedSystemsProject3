@@ -4,7 +4,7 @@ public class TimeoutEnforcer extends Thread
 {
 	private static final int TIMEOUT = 5000;
 	private static int transactionID;
-	public static boolean receivedPrepareCall = false;
+	public static boolean votedYes = false;
 	private static ResourceManagerImpl resourceManager;
 	
 	public TimeoutEnforcer(int tid, ResourceManagerImpl rm)
@@ -21,8 +21,8 @@ public class TimeoutEnforcer extends Thread
 		{
 			Thread.sleep(TIMEOUT);
 			
-			if(receivedPrepareCall)
-				Thread.sleep(TIMEOUT);
+			if(votedYes)
+				return;
 			
 			resourceManager.abort(transactionID);
 		}
