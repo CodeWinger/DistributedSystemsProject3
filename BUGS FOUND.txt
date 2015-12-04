@@ -1,6 +1,0 @@
- BUG 1:
-
- trx 1: create rooms, flights and cars. Rooms and cars at the same lcoation
- trx 2: new customerid, reserveflight, reserveroom, reserve room
- 									   reservecar , reserve car
- can only reserve one of the cars and rooms, not both
